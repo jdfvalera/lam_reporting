@@ -2,18 +2,14 @@ import pandas as pd
 import re
 from .base import default_clicktag_longform
 
+
+# --------------------------------------------------
+# Core processing
+# --------------------------------------------------
 def process(
     df: pd.DataFrame,
     guide_df: pd.DataFrame | None = None
 ) -> pd.DataFrame:
-    """
-    Redner's processing:
-    - FT → long-form click tags
-    - Rename Version → Store
-    - Parse Placement → Version
-    - Join Click Tag Guide on Ad Size + Click Tag ONLY
-    - KEEP Opening Frame and End Frame clicks
-    """
 
     # -------------------------------
     # FT → long-form click tags
@@ -27,14 +23,24 @@ def process(
         long_df = long_df.rename(columns={"Version": "Store"})
 
     # -------------------------------
-    # Parse Placement → Version
+    # Placement → Version
     # -------------------------------
     def parse_version(val):
         if not isinstance(val, str):
             return None
-        return val.split("_", 1)[0].strip()
+        return val.split("_", 1)[0].strip().upper()
 
     long_df["Version"] = long_df["Placement"].apply(parse_version)
+
+    # -------------------------------
+    # Version → Guide Version
+    # -------------------------------
+    def map_to_guide_version(v):
+        if v == "S96":
+            return "S96"
+        return "Others"
+
+    long_df["Guide Version"] = long_df["Version"].apply(map_to_guide_version)
 
     # -------------------------------
     # Ad Size normalization
@@ -58,10 +64,12 @@ def process(
     # -------------------------------
     guide = guide_df.rename(
         columns={
+            "Banner": "Guide Version",
             "Sizes": "Ad Size",
         }
     )
 
+    guide["Guide Version"] = guide["Guide Version"].astype(str).str.strip()
     guide["Ad Size"] = guide["Ad Size"].apply(clean_ad_size)
 
     click_cols = [
@@ -76,7 +84,7 @@ def process(
     # Unpivot guide
     # -------------------------------
     guide_long = guide.melt(
-        id_vars=["Ad Size"],
+        id_vars=["Guide Version", "Ad Size"],
         value_vars=click_cols,
         var_name="Click Tag",
         value_name="Product Name",
@@ -88,26 +96,26 @@ def process(
         .astype(int)
     )
 
-    # Drop ONLY truly empty guide cells
     guide_long = guide_long.dropna(subset=["Product Name"])
 
     # -------------------------------
-    # FINAL join-key normalization
+    # Normalize join keys
     # -------------------------------
-    long_df["Ad Size"] = long_df["Ad Size"].astype(str).str.strip()
-    guide_long["Ad Size"] = guide_long["Ad Size"].astype(str).str.strip()
+    for col in ["Guide Version", "Ad Size"]:
+        long_df[col] = long_df[col].astype(str).str.strip()
+        guide_long[col] = guide_long[col].astype(str).str.strip()
 
     # -------------------------------
-    # Join FT → guide (SIZE + CLICK TAG ONLY)
+    # Join FT → guide
     # -------------------------------
     enriched = long_df.merge(
         guide_long,
-        on=["Ad Size", "Click Tag"],
+        on=["Guide Version", "Ad Size", "Click Tag"],
         how="left",
     )
 
     # -------------------------------
-    # Clean Product Name (DO NOT DROP FRAMES)
+    # Clean Product Name (KEEP frames)
     # -------------------------------
     enriched = enriched.dropna(subset=["Product Name"])
     enriched["Product Name"] = enriched["Product Name"].astype(str).str.strip()

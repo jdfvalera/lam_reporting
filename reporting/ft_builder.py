@@ -15,7 +15,12 @@ def build_ft_data(df, week_number, campaign_type):
     else:
         date_range = f"{start.strftime('%b %-d')} - {end.strftime('%b %-d')}"
 
-    campaign = f"W{week_number} {campaign_type}_{date_range}"
+    if week_number is not None and campaign_type:
+        campaign = f"W{week_number} {campaign_type}_{date_range}"
+    elif week_number is not None:
+        campaign = f"W{week_number}_{date_range}"
+    else:
+        campaign = date_range
 
     ft_data = pd.DataFrame({
         "Date": df["Date"],

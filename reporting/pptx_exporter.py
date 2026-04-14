@@ -330,7 +330,14 @@ def _products_slide(prs, ft_data, insights, campaign_name, palette):
     slide = _blank_slide(prs)
     _add_header(slide, "Summary – Products.", palette)
 
-    col = "Product" if "Product" in ft_data.columns else "Products"
+    col = (
+        "Product" if "Product" in ft_data.columns
+        else "Products" if "Products" in ft_data.columns
+        else None
+    )
+    if col is None:
+        # No product mapping available — skip this slide
+        return
     products = (ft_data.groupby(col)["Clicks"]
                 .sum().sort_values(ascending=False).head(10))
 

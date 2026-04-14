@@ -60,6 +60,7 @@ for key, default in {
     "hab_buffer": None,
     "hab_filename": None,
     "saved_client": None,
+    "saved_custom_brand_name": None,
     "saved_week_number": None,
     "saved_campaign_type": None,
     "saved_region": None,
@@ -95,14 +96,19 @@ st.header("Product Clicks Inputs")
 
 brand = st.selectbox("Brand / Processor", list(PROCESSORS.keys()) + ["Custom"])
 
+custom_brand_name = None
 week_number = None
 campaign_type = None
 
-if brand in ("Redner's", "McCaffrey's", "USM"):
+if brand == "Custom":
+    custom_brand_name = st.text_input("Brand Name")
     week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
+    campaign_type = st.text_input("Campaign Type (e.g. Regular Ad, Sale)")
 
-if brand == "McCaffrey's":
-    campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
+elif brand in ("USM", "Redner's", "McCaffrey's"):
+    week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
+    if brand == "McCaffrey's":
+        campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
 
 ft_file = st.file_uploader("FT File", type=["xlsx"])
 
@@ -143,7 +149,12 @@ if st.session_state.stage == "idle":
             st.error("Please upload all required files.")
             st.stop()
 
+        if brand == "Custom" and not custom_brand_name:
+            st.error("Please enter a Brand Name for the Custom processor.")
+            st.stop()
+
         st.session_state.saved_client = client
+        st.session_state.saved_custom_brand_name = custom_brand_name
         st.session_state.saved_week_number = week_number
         st.session_state.saved_campaign_type = campaign_type
         st.session_state.saved_region = region

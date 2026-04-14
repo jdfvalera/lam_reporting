@@ -5,6 +5,7 @@ from io import BytesIO
 from habanero.generator import generate_habanero_report
 from reporting.ft_builder import build_ft_data
 from reporting.dv360_builder import build_dv360_data
+from reporting.pptx_exporter import build_pptx
 
 from dashboard.summary import show_summary
 from dashboard.demographics import show_demographics
@@ -22,11 +23,31 @@ PROCESSORS = {
     "McCaffrey's": mccaffreys
 }
 
+PALETTES = {
+    "Classic Red": {
+        "primary": "#8B1A1A",
+        "secondary": "#f2a6a6",
+        "accent": "#c49a00",
+    },
+    "Navy Blue": {
+        "primary": "#1A3A6B",
+        "secondary": "#a6bdf2",
+        "accent": "#c49a00",
+    },
+    "Forest Green": {
+        "primary": "#1A5C2A",
+        "secondary": "#a6d4b0",
+        "accent": "#c49a00",
+    },
+    "Slate Purple": {
+        "primary": "#3D1A6B",
+        "secondary": "#c2a6f2",
+        "accent": "#c49a00",
+    },
+}
 
-st.set_page_config(
-    page_title="CS Reporting Pipeline",
-    layout="wide"
-)
+
+st.set_page_config(page_title="CS Reporting Pipeline", layout="wide")
 
 # --------------------------------------------------
 # Session state
@@ -44,6 +65,9 @@ for key, default in {
     "saved_region": None,
     "saved_target_impressions": 0,
     "saved_target_ctr": 0.0,
+    "ft_data": None,
+    "dv360_data": None,
+    "campaign_name": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -93,24 +117,42 @@ target_impressions = st.number_input("Target Impressions", min_value=0)
 target_ctr = st.number_input("Target CTR (%)", min_value=0.0, step=0.01) / 100
 target_clicks = int(target_impressions * target_ctr)
 
+st.divider()
+
+# --------------------------------------------------
+# REPORT SETTINGS  (always visible — affects live dashboard + PPT)
+# --------------------------------------------------
+st.header("Report Settings")
+
+palette_name = st.selectbox("Color Palette", list(PALETTES.keys()))
+palette = PALETTES[palette_name]
+
+logo_file = st.file_uploader(
+    "Client Logo for PPT title slide (optional — PNG or JPG)",
+    type=["png", "jpg", "jpeg"],
+)
+
 # --------------------------------------------------
 # STAGE: idle — show Generate button
 # --------------------------------------------------
 if st.session_state.stage == "idle":
 
-    if st.button("Generate Reports"):
+    if st.button("Generate Reports", type="primary"):
 
         if not all([weekly_file, frequency_file, ft_file, client, report_number]):
             st.error("Please upload all required files.")
             st.stop()
 
-        # Persist inputs for use in later stages
         st.session_state.saved_client = client
         st.session_state.saved_week_number = week_number
         st.session_state.saved_campaign_type = campaign_type
         st.session_state.saved_region = region
         st.session_state.saved_target_impressions = target_impressions
         st.session_state.saved_target_ctr = target_ctr
+        # Clear cached computed data so done stage recalculates
+        st.session_state.ft_data = None
+        st.session_state.dv360_data = None
+        st.session_state.campaign_name = None
 
         # HABANERO
         habanero_df, hab_buffer, hab_filename = generate_habanero_report(
@@ -133,7 +175,6 @@ if st.session_state.stage == "idle":
         else:
             long_df = generic_process(wide_df, guide_df)
 
-        # USM categorization check
         if (
             brand == "USM"
             and hasattr(usm, "needs_manual_categorization")
@@ -143,7 +184,6 @@ if st.session_state.stage == "idle":
             st.session_state.stage = "categorize"
             st.rerun()
 
-        # Non-USM: build final export immediately
         if processor:
             final_clicks = processor.build_final_export(
                 long_df, week_number=week_number, campaign_type=campaign_type
@@ -177,45 +217,50 @@ if st.session_state.stage == "categorize":
         df = usm.apply_category_map(df, category_map)
         final_clicks = usm.build_final_export(df)
         st.session_state.pc_final_df = final_clicks
+        st.session_state.ft_data = None
+        st.session_state.dv360_data = None
+        st.session_state.campaign_name = None
         st.session_state.stage = "done"
         st.rerun()
 
 # --------------------------------------------------
-# STAGE: done — preview, exports, dashboard
+# STAGE: done — previews, exports, dashboard, PPT
 # --------------------------------------------------
 if st.session_state.stage == "done" and st.session_state.pc_final_df is not None:
 
     final_clicks = st.session_state.pc_final_df
-    habanero_df = st.session_state.habanero_df
-    hab_buffer = st.session_state.hab_buffer
+    habanero_df  = st.session_state.habanero_df
+    hab_buffer   = st.session_state.hab_buffer
     hab_filename = st.session_state.hab_filename
-    saved_client = st.session_state.saved_client
-    saved_week_number = st.session_state.saved_week_number
-    saved_campaign_type = st.session_state.saved_campaign_type
-    saved_region = st.session_state.saved_region
-    saved_target_impressions = st.session_state.saved_target_impressions
-    saved_target_ctr = st.session_state.saved_target_ctr
-    saved_target_clicks = int(saved_target_impressions * saved_target_ctr)
+    saved_client              = st.session_state.saved_client
+    saved_week_number         = st.session_state.saved_week_number
+    saved_campaign_type       = st.session_state.saved_campaign_type
+    saved_region              = st.session_state.saved_region
+    saved_target_impressions  = st.session_state.saved_target_impressions
+    saved_target_ctr          = st.session_state.saved_target_ctr
+    saved_target_clicks       = int(saved_target_impressions * saved_target_ctr)
+
+    # Compute ft_data / dv360_data once and cache in session state
+    if st.session_state.ft_data is None:
+        ft_data, campaign_name = build_ft_data(
+            final_clicks, saved_week_number, saved_campaign_type
+        )
+        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region)
+        st.session_state.ft_data      = ft_data
+        st.session_state.dv360_data   = dv360_data
+        st.session_state.campaign_name = campaign_name
+    else:
+        ft_data       = st.session_state.ft_data
+        dv360_data    = st.session_state.dv360_data
+        campaign_name = st.session_state.campaign_name
 
     st.success("Product clicks processed.")
-
-    # -----------------------------
-    # FT DATA
-    # -----------------------------
-    ft_data, campaign_name = build_ft_data(
-        final_clicks, saved_week_number, saved_campaign_type
-    )
 
     st.subheader(f"Preview — {saved_client} ({campaign_name})")
     st.dataframe(habanero_df, use_container_width=True)
 
     st.markdown("### Preview — Final Click Tag Output")
     st.dataframe(final_clicks, use_container_width=True)
-
-    # -----------------------------
-    # DV360 DATA
-    # -----------------------------
-    dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region)
 
     # -----------------------------
     # INTERNAL CS EXPORT
@@ -225,21 +270,18 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
         ft_data.to_excel(writer, sheet_name="ft_data", index=False)
         dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
 
-    # -----------------------------
-    # DOWNLOADS
-    # -----------------------------
     st.download_button(
         "Download Habanero Report",
         data=hab_buffer.getvalue(),
         file_name=hab_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
     st.download_button(
         "Download Internal Raw File for CS",
         data=cs_buffer.getvalue(),
         file_name=f"{saved_client}_Internal_Raw_File_for_CS.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
     st.divider()
@@ -250,23 +292,52 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
         "Demographics",
         "Area Performance",
         "Product Performance",
-        "Creative Performance"
+        "Creative Performance",
     ])
 
     with tabs[0]:
-        show_summary(dv360_data, saved_target_impressions, saved_target_clicks, saved_target_ctr)
-
+        show_summary(dv360_data, saved_target_impressions, saved_target_clicks,
+                     saved_target_ctr, palette)
     with tabs[1]:
-        show_demographics(dv360_data)
-
+        show_demographics(dv360_data, palette)
     with tabs[2]:
-        show_area_performance(dv360_data)
-
+        show_area_performance(dv360_data, palette)
     with tabs[3]:
-        show_products(ft_data)
-
+        show_products(ft_data, palette)
     with tabs[4]:
-        show_creatives(dv360_data)
+        show_creatives(dv360_data, palette)
+
+    # -----------------------------
+    # PPT EXPORT
+    # -----------------------------
+    st.divider()
+    st.subheader("Export Report")
+
+    if st.button("Generate PowerPoint", type="primary"):
+        with st.spinner("Building presentation…"):
+            pptx_buf = build_pptx(
+                client=saved_client,
+                campaign_name=campaign_name,
+                habanero_df=habanero_df,
+                ft_data=ft_data,
+                dv360_data=dv360_data,
+                target_impressions=saved_target_impressions,
+                target_clicks=saved_target_clicks,
+                target_ctr=saved_target_ctr,
+                highlights=st.session_state.get("campaign_highlights", ""),
+                demographic_insights=st.session_state.get("demographic_insights", ""),
+                area_insights=st.session_state.get("area_insights", ""),
+                product_insights=st.session_state.get("product_insights", ""),
+                creative_insights=st.session_state.get("creative_insights", ""),
+                palette=palette,
+                logo_bytes=logo_file.getvalue() if logo_file else None,
+            )
+        st.download_button(
+            "Download PowerPoint",
+            data=pptx_buf.getvalue(),
+            file_name=f"{saved_client}_Campaign_Report.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
 
     st.divider()
     if st.button("Start Over"):

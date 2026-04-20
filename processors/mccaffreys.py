@@ -23,18 +23,21 @@ def process(
     long_df = generic_process(df, guide_df)
 
     # -------------------------------
-    # Parse Store from Placement
+    # Parse Store from Version
     # -------------------------------
-    if "Placement" in long_df.columns:
+    if "Version" in long_df.columns:
         long_df["Store"] = (
-            long_df["Placement"]
+            long_df["Version"]
             .astype(str)
-            .str.split("_", n=1)
-            .str[0]
-            .str.strip()
+            .str.replace("_", " ")
         )
     else:
         long_df["Store"] = None
+        
+    # -------------------------------
+    # Remove default stores
+    # -------------------------------
+    long_df = long_df[long_df["Store"] != "default"]
 
     # -------------------------------
     # Exclude Opening / End Frames

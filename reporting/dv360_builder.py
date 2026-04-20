@@ -1,13 +1,147 @@
 import pandas as pd
+import re
 
 
-def build_dv360_data(habanero_df, campaign, region):
+# --------------------------------------------------
+# USM helpers
+# --------------------------------------------------
+_BRAND_MAP = {
+    "ALB": "Albertsons",
+    "MS":  "Market Street",
+    "USM": "United Supermarkets",
+}
+
+
+def _parse_insertion_order(io_str):
+    """'ALB_665_Carlsbad, NM' → (brand, store_no, area)"""
+    if not isinstance(io_str, str):
+        return None, None, None
+
+    parts = io_str.split("_", 2)
+    if len(parts) < 3:
+        return None, None, None
+
+    prefix    = parts[0].strip().upper()
+    store_no  = parts[1].strip()
+    area_raw  = parts[2].strip()
+
+    brand = _BRAND_MAP.get(prefix)
+    # Strip state code: "Carlsbad, NM" → "Carlsbad"
+    area = re.sub(r",\s*[A-Z]{2}$", "", area_raw).strip()
+
+    return brand, store_no, area
+
+
+def _parse_gender(line_item):
+    if isinstance(line_item, str):
+        s = line_item.strip()
+        if s.startswith("F"):
+            return "Females"
+        else:
+            return "Males"
+    return "Unknown"
+
+
+def _fmt_ctr(impressions, clicks):
+    """Return 'x.xx%' string, safe against divide-by-zero."""
+    if impressions > 0:
+        return f"{clicks / impressions * 100:.2f}%"
+    return "0.00%"
+
+
+def _agg(df, group_cols):
+    g = df.groupby(group_cols, sort=False).agg(
+        Impressions=("Impressions", "sum"),
+        Clicks=("Clicks", "sum"),
+    ).reset_index()
+    g["CTR"] = g.apply(lambda r: _fmt_ctr(r["Impressions"], r["Clicks"]), axis=1)
+    return g
+
+
+def _campaign_label(df):
+    start = df["Date"].min()
+    end   = df["Date"].max()
+    if start.month == end.month:
+        return f"{start.strftime('%b')} {start.day} - {end.day}"
+    return f"{start.strftime('%b')} {start.day} - {end.strftime('%b')} {end.day}"
+
+
+# --------------------------------------------------
+# USM multi-table builder
+# --------------------------------------------------
+def _build_usm_dv360(df):
+
+    # Parse Insertion Order
+    parsed         = df["Insertion Order"].apply(_parse_insertion_order)
+    df["Brand"]    = parsed.apply(lambda x: x[0])
+    df["Store No."]= parsed.apply(lambda x: x[1])
+    df["Area"]     = parsed.apply(lambda x: x[2])
+    df["Gender"]   = df["Line Item"].apply(_parse_gender)
+
+    label = _campaign_label(df)
+
+    # --- Table 1: Daily summary ---
+    t1 = _agg(df, ["Date"])
+    t1.columns = ["Date (adjusted)", "Impressions", "Clicks", "CTR (%)"]
+
+    # --- Table 2: Gender breakdown ---
+    t2 = _agg(df, ["Gender"])
+    t2.columns = ["", "Impressions", "Clicks", "CTR"]
+
+    # --- Table 3: Ad Size breakdown (sorted by Impressions desc) ---
+    t3 = _agg(df, ["Creative Size"])
+    t3 = t3.sort_values("Impressions", ascending=False).reset_index(drop=True)
+    t3.columns = ["Ad Size", "Impressions", "Clicks", "CTR"]
+
+    # --- Table 4: Store detail by date ---
+    t4 = _agg(df, ["Date", "Brand", "Store No.", "Area"])
+    t4.columns = ["Date", "Brand", "Store No.", "Area", "Impressions", "Clicks", "Click Rate (CTR)"]
+
+    # --- Table 6: Daily by Ad Size ---
+    t6 = _agg(df, ["Date", "Creative Size"])
+    t6.columns = ["Date", "Creative Size", "Impressions", "Clicks", "Click Rate (CTR)"]
+
+    # --- Table 7: Area totals (campaign period) ---
+    t7 = _agg(df, ["Area"])
+    t7.insert(0, "Date", label)
+    t7.columns = ["Date", "Area", "Impressions", "Clicks", "Click Rate (CTR)"]
+
+    # --- Table 8: Brand + Area totals (campaign period) ---
+    t8 = _agg(df, ["Brand", "Area"])
+    t8.insert(0, "Date", label)
+    t8.columns = ["Date", "Brand", "Area", "Impressions", "Clicks", "Click Rate (CTR)"]
+
+    # --- Table 9: Store + Demographics (campaign period) ---
+    t9 = _agg(df, ["Store No.", "Area", "Line Item"])
+    t9.insert(0, "Date", label)
+    t9.columns = ["Date", "Store No.", "Area", "Demographics", "Impressions", "Clicks", "CTR (%)"]
+
+    return {
+        "1_Daily Summary":      t1,
+        "2_Gender":             t2,
+        "3_Ad Size":            t3,
+        "4_Store Detail":       t4,
+        "6_Daily by Ad Size":   t6,
+        "7_Area Totals":        t7,
+        "8_Brand Area Totals":  t8,
+        "9_Store Demographics": t9,
+    }
+
+
+# --------------------------------------------------
+# Public entry point
+# --------------------------------------------------
+def build_dv360_data(habanero_df, campaign, region, client=None):
 
     df = habanero_df.copy()
 
     if region == "US":
         df["Date"] = df["Date"] - pd.Timedelta(days=1)
 
+    if client == "USM":
+        return _build_usm_dv360(df)
+
+    # Generic (all other clients)
     df["Store"] = (
         df["Insertion Order"]
         .astype(str)
@@ -15,16 +149,14 @@ def build_dv360_data(habanero_df, campaign, region):
         .str[-1]
     )
 
-    dv360 = pd.DataFrame({
-        "Date": df["Date"],
-        "Campaign": campaign,
-        "Store": df["Store"],
-        "Demographics": df["Line Item"],
-        "Creative Size": df["Creative Size"],
-        "Device Type": df["Device Type"],
-        "Impressions": df["Impressions"],
-        "Clicks": df["Clicks"],
+    return pd.DataFrame({
+        "Date":             df["Date"],
+        "Campaign":         campaign,
+        "Store":            df["Store"],
+        "Demographics":     df["Line Item"],
+        "Creative Size":    df["Creative Size"],
+        "Device Type":      df["Device Type"],
+        "Impressions":      df["Impressions"],
+        "Clicks":           df["Clicks"],
         "Click Rate (CTR)": df["Click Rate (CTR)"],
     })
-
-    return dv360

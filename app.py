@@ -143,8 +143,31 @@ logo_file = st.file_uploader(
 # --------------------------------------------------
 if st.session_state.stage == "idle":
 
-    if st.button("Generate Reports", type="primary"):
+    col_a, col_b = st.columns([1, 1])
 
+    with col_a:
+        run_habanero_only = st.button("Generate Habanero Only", type="secondary")
+    with col_b:
+        run_full = st.button("Generate Reports", type="primary")
+
+    if run_habanero_only:
+        if not all([weekly_file, frequency_file, client, report_number]):
+            st.error("Please upload the Weekly Data Pull and Frequency File, and fill in Client Name and Report Number.")
+            st.stop()
+
+        st.session_state.saved_client = client
+        st.session_state.saved_region = region
+
+        habanero_df, hab_buffer, hab_filename = generate_habanero_report(
+            weekly_file, frequency_file, client, report_number, region
+        )
+        st.session_state.habanero_df = habanero_df
+        st.session_state.hab_buffer = hab_buffer
+        st.session_state.hab_filename = hab_filename
+        st.session_state.stage = "habanero_only"
+        st.rerun()
+
+    if run_full:
         if not all([weekly_file, frequency_file, ft_file, client, report_number]):
             st.error("Please upload all required files.")
             st.stop()
@@ -207,6 +230,26 @@ if st.session_state.stage == "idle":
         st.rerun()
 
 # --------------------------------------------------
+# STAGE: habanero_only — download only
+# --------------------------------------------------
+if st.session_state.stage == "habanero_only":
+    st.success("Habanero report generated.")
+    st.dataframe(st.session_state.habanero_df, use_container_width=True)
+
+    st.download_button(
+        "Download Habanero Report",
+        data=st.session_state.hab_buffer.getvalue(),
+        file_name=st.session_state.hab_filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    st.divider()
+    if st.button("Start Over", key="habanero_only_start_over"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+# --------------------------------------------------
 # STAGE: categorize (USM only)
 # --------------------------------------------------
 if st.session_state.stage == "categorize":
@@ -254,9 +297,9 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     # Compute ft_data / dv360_data once and cache in session state
     if st.session_state.ft_data is None:
         ft_data, campaign_name = build_ft_data(
-            final_clicks, saved_week_number, saved_campaign_type
+            final_clicks, saved_week_number, saved_campaign_type, client=saved_client
         )
-        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region)
+        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region, client=saved_client)
         st.session_state.ft_data      = ft_data
         st.session_state.dv360_data   = dv360_data
         st.session_state.campaign_name = campaign_name
@@ -279,7 +322,11 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     cs_buffer = BytesIO()
     with pd.ExcelWriter(cs_buffer, engine="openpyxl") as writer:
         ft_data.to_excel(writer, sheet_name="ft_data", index=False)
-        dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
+        if isinstance(dv360_data, dict):
+            for sheet_name, sheet_df in dv360_data.items():
+                sheet_df.to_excel(writer, sheet_name=sheet_name, index=False)
+        else:
+            dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
 
     st.download_button(
         "Download Habanero Report",

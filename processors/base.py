@@ -99,12 +99,11 @@ def generic_process(
         how="left",
     )
     
-    unmapped = enriched[enriched["Product"].isna()]
-    dropped_clicks = int(unmapped["Clicks"].sum())
+    unmapped_df = enriched[enriched["Product"].isna()].copy()
 
     enriched.dropna(inplace=True, subset=["Product"])
 
-    return enriched, dropped_clicks
+    return enriched, unmapped_df
 
 
 # --------------------------------------------------

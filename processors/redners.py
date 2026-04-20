@@ -117,14 +117,13 @@ def process(
     # -------------------------------
     # Flag unmapped clicks, then drop
     # -------------------------------
-    unmapped = enriched[enriched["Product Name"].isna()]
-    dropped_clicks = int(unmapped["Clicks"].sum())
+    unmapped_df = enriched[enriched["Product Name"].isna()].copy()
 
     enriched = enriched.dropna(subset=["Product Name"])
     enriched["Product Name"] = enriched["Product Name"].astype(str).str.strip()
     enriched = enriched[enriched["Product Name"] != ""]
 
-    return enriched, dropped_clicks
+    return enriched, unmapped_df
 
 
 def build_final_export(

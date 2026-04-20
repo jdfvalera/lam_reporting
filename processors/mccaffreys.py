@@ -20,7 +20,7 @@ def process(
 ) -> pd.DataFrame:
 
     # Use generic engine first
-    long_df, dropped_clicks = generic_process(df, guide_df)
+    long_df, unmapped_df = generic_process(df, guide_df)
 
     # -------------------------------
     # Parse Store from Version
@@ -48,7 +48,7 @@ def process(
             ~long_df["Product"].isin(EXCLUDED_PRODUCTS)
         ]
 
-    return long_df, dropped_clicks
+    return long_df, unmapped_df
 
 
 # --------------------------------------------------

@@ -70,7 +70,7 @@ for key, default in {
     "dv360_data": None,
     "campaign_name": None,
     "saved_brand": None,
-    "unmapped_clicks": 0,
+    "unmapped_df": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -207,21 +207,21 @@ if st.session_state.stage == "idle":
 
         processor = PROCESSORS.get(brand)
 
-        unmapped_clicks = 0
+        unmapped_df = pd.DataFrame()
         if processor:
             result = processor.process(wide_df, guide_df)
             if isinstance(result, tuple):
-                long_df, unmapped_clicks = result
+                long_df, unmapped_df = result
             else:
                 long_df = result
         else:
             result = generic_process(wide_df, guide_df)
             if isinstance(result, tuple):
-                long_df, unmapped_clicks = result
+                long_df, unmapped_df = result
             else:
                 long_df = result
 
-        st.session_state.unmapped_clicks = unmapped_clicks
+        st.session_state.unmapped_df = unmapped_df
 
         if (
             brand == "USM"
@@ -324,9 +324,19 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
 
     st.success("Product clicks processed.")
 
-    unmapped_clicks = st.session_state.unmapped_clicks
-    if unmapped_clicks > 0:
-        st.warning(f"{unmapped_clicks:,} click(s) were dropped — click tags not found in the guide.")
+    unmapped_df = st.session_state.unmapped_df
+    if unmapped_df is not None and not unmapped_df.empty:
+        dropped_total = int(unmapped_df["Clicks"].sum())
+        st.warning(f"{dropped_total:,} click(s) were dropped — click tags not found in the guide.")
+        with st.expander("View unmapped click breakdown"):
+            group_cols = [c for c in ["Version", "Brand", "Store", "Ad Size", "Click Tag"] if c in unmapped_df.columns]
+            breakdown = (
+                unmapped_df.groupby(group_cols, sort=False)["Clicks"]
+                .sum()
+                .reset_index()
+                .sort_values("Clicks", ascending=False)
+            )
+            st.dataframe(breakdown, use_container_width=True, hide_index=True)
 
     st.subheader(f"Preview — {saved_client} ({campaign_name})")
     st.dataframe(habanero_df, use_container_width=True)

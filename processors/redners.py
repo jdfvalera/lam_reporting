@@ -158,6 +158,6 @@ def build_final_export(
         "Store": df["Store"],
         "Ad Size": df["Ad Size"],
         "Click Tag": df["Click Tag"],
-        "Product Name": df["Product Name"],
+        "Product": df["Product Name"],
         "Clicks": df["Clicks"],
     })

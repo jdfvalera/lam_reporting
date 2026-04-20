@@ -27,7 +27,7 @@ def build_ft_data(df, week_number, campaign_type, client=None):
             "Date": df["Date"],
             "Brand": df.get("Brand"),
             "Promotion Code": df.get("Promotion Code"),
-            "Products": df.get("Product"),
+            "Products": df.get("Products"),
             "Category": df.get("Category"),
             "Ad Size": df.get("Ad Size"),
             "Click Tag": df.get("Click Tag"),

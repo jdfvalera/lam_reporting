@@ -129,9 +129,52 @@ def _build_usm_dv360(df):
 
 
 # --------------------------------------------------
+# Redner's multi-table builder
+# --------------------------------------------------
+def _parse_redners_io(io_str):
+    """'VERSION_STATE_Location City' → (version, state, location)"""
+    if not isinstance(io_str, str):
+        return None, None, None
+    parts = io_str.split("_", 2)
+    version  = parts[0].strip() if len(parts) > 0 else None
+    state    = parts[1].strip() if len(parts) > 1 else None
+    location = parts[2].strip() if len(parts) > 2 else None
+    return version, state, location
+
+
+def _build_redners_dv360(df, week_number):
+    parsed          = df["Insertion Order"].apply(_parse_redners_io)
+    df["Version"]   = parsed.apply(lambda x: x[0])
+    df["State"]     = parsed.apply(lambda x: x[1])
+    df["Location"]  = parsed.apply(lambda x: x[2])
+
+    start = df["Date"].min()
+    end   = df["Date"].max()
+    if start.month == end.month:
+        date_range = f"{start.strftime('%b %-d')} - {end.strftime('%-d')}"
+    else:
+        date_range = f"{start.strftime('%b %-d')} - {end.strftime('%b %-d')}"
+    week_label = f"Week {week_number}: {date_range}"
+
+    return pd.DataFrame({
+        "Date":             df["Date"],
+        "Week":             week_label,
+        "Version":          df["Version"],
+        "State":            df["State"],
+        "Location":         df["Location"],
+        "Demographics":     df["Line Item"],
+        "Creative Size":    df["Creative Size"],
+        "Device Type":      df["Device Type"],
+        "Impressions":      df["Impressions"],
+        "Clicks":           df["Clicks"],
+        "Click Rate (CTR)": df["Click Rate (CTR)"],
+    })
+
+
+# --------------------------------------------------
 # Public entry point
 # --------------------------------------------------
-def build_dv360_data(habanero_df, campaign, region, client=None):
+def build_dv360_data(habanero_df, campaign, region, client=None, week_number=None):
 
     df = habanero_df.copy()
 
@@ -140,6 +183,9 @@ def build_dv360_data(habanero_df, campaign, region, client=None):
 
     if client == "USM":
         return _build_usm_dv360(df)
+
+    if client == "Redner's":
+        return _build_redners_dv360(df, week_number)
 
     # Generic (all other clients)
     df["Store"] = (

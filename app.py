@@ -299,7 +299,7 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
         ft_data, campaign_name = build_ft_data(
             final_clicks, saved_week_number, saved_campaign_type, client=saved_client
         )
-        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region, client=saved_client)
+        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region, client=saved_client, week_number=saved_week_number)
         st.session_state.ft_data      = ft_data
         st.session_state.dv360_data   = dv360_data
         st.session_state.campaign_name = campaign_name

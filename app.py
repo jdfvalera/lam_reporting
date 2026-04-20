@@ -69,6 +69,8 @@ for key, default in {
     "ft_data": None,
     "dv360_data": None,
     "campaign_name": None,
+    "saved_brand": None,
+    "unmapped_clicks": 0,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -177,6 +179,7 @@ if st.session_state.stage == "idle":
             st.stop()
 
         st.session_state.saved_client = client
+        st.session_state.saved_brand = brand
         st.session_state.saved_custom_brand_name = custom_brand_name
         st.session_state.saved_week_number = week_number
         st.session_state.saved_campaign_type = campaign_type
@@ -204,10 +207,21 @@ if st.session_state.stage == "idle":
 
         processor = PROCESSORS.get(brand)
 
+        unmapped_clicks = 0
         if processor:
-            long_df = processor.process(wide_df, guide_df)
+            result = processor.process(wide_df, guide_df)
+            if isinstance(result, tuple):
+                long_df, unmapped_clicks = result
+            else:
+                long_df = result
         else:
-            long_df = generic_process(wide_df, guide_df)
+            result = generic_process(wide_df, guide_df)
+            if isinstance(result, tuple):
+                long_df, unmapped_clicks = result
+            else:
+                long_df = result
+
+        st.session_state.unmapped_clicks = unmapped_clicks
 
         if (
             brand == "USM"
@@ -287,6 +301,7 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     hab_buffer   = st.session_state.hab_buffer
     hab_filename = st.session_state.hab_filename
     saved_client              = st.session_state.saved_client
+    saved_brand               = st.session_state.saved_brand
     saved_week_number         = st.session_state.saved_week_number
     saved_campaign_type       = st.session_state.saved_campaign_type
     saved_region              = st.session_state.saved_region
@@ -294,21 +309,24 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     saved_target_ctr          = st.session_state.saved_target_ctr
     saved_target_clicks       = int(saved_target_impressions * saved_target_ctr)
 
-    # Compute ft_data / dv360_data once and cache in session state
+    # Compute ft_data once and cache; always rebuild dv360_data
     if st.session_state.ft_data is None:
         ft_data, campaign_name = build_ft_data(
-            final_clicks, saved_week_number, saved_campaign_type, client=saved_client
+            final_clicks, saved_week_number, saved_campaign_type, client=saved_brand
         )
-        dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region, client=saved_client, week_number=saved_week_number)
         st.session_state.ft_data      = ft_data
-        st.session_state.dv360_data   = dv360_data
         st.session_state.campaign_name = campaign_name
     else:
         ft_data       = st.session_state.ft_data
-        dv360_data    = st.session_state.dv360_data
         campaign_name = st.session_state.campaign_name
 
+    dv360_data = build_dv360_data(habanero_df, campaign_name, saved_region, client=saved_brand, week_number=saved_week_number)
+
     st.success("Product clicks processed.")
+
+    unmapped_clicks = st.session_state.unmapped_clicks
+    if unmapped_clicks > 0:
+        st.warning(f"{unmapped_clicks:,} click(s) were dropped — click tags not found in the guide.")
 
     st.subheader(f"Preview — {saved_client} ({campaign_name})")
     st.dataframe(habanero_df, use_container_width=True)

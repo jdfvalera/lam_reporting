@@ -143,6 +143,9 @@ def process(
     # -------------------------------
     # Remove empty + non-analytic products
     # -------------------------------
+    unmapped = enriched[enriched["Product"].isna()]
+    dropped_clicks = int(unmapped["Clicks"].sum())
+
     enriched = enriched.dropna(subset=["Product"])
     enriched["Product"] = enriched["Product"].astype(str).str.strip()
     enriched = enriched[enriched["Product"] != ""]
@@ -150,7 +153,7 @@ def process(
         ~enriched["Product"].isin(EXCLUDED_PRODUCTS)
     ]
 
-    return enriched
+    return enriched, dropped_clicks
 
 
 # --------------------------------------------------

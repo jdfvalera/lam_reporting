@@ -115,13 +115,16 @@ def process(
     )
 
     # -------------------------------
-    # Clean Product Name (KEEP frames)
+    # Flag unmapped clicks, then drop
     # -------------------------------
+    unmapped = enriched[enriched["Product Name"].isna()]
+    dropped_clicks = int(unmapped["Clicks"].sum())
+
     enriched = enriched.dropna(subset=["Product Name"])
     enriched["Product Name"] = enriched["Product Name"].astype(str).str.strip()
     enriched = enriched[enriched["Product Name"] != ""]
 
-    return enriched
+    return enriched, dropped_clicks
 
 
 def build_final_export(
@@ -158,6 +161,6 @@ def build_final_export(
         "Store": df["Store"],
         "Ad Size": df["Ad Size"],
         "Click Tag": df["Click Tag"],
-        "Product": df["Product Name"],
+        "Product": df.get("Product Name"),
         "Clicks": df["Clicks"],
     })

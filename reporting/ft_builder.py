@@ -33,6 +33,17 @@ def build_ft_data(df, week_number, campaign_type, client=None):
             "Click Tag": df.get("Click Tag"),
             "Clicks": df["Clicks"],
         })
+    elif client == "Redner's":
+        ft_data = pd.DataFrame({
+            "Date": df["Date"],
+            "Week": df.get("Week"),
+            "Version": df.get("Version"),
+            "Store": df.get("Store"),
+            "Ad Size": df.get("Ad Size"),
+            "Click Tag": df.get("Click Tag"),
+            "Product Name": df.get("Product"),
+            "Clicks": df["Clicks"],
+        })
     else:
         ft_data = pd.DataFrame({
             "Date": df["Date"],

@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def build_ft_data(df, week_number, campaign_type):
+def build_ft_data(df, week_number, campaign_type, client=None):
 
     df = df.copy()
 
@@ -22,13 +22,25 @@ def build_ft_data(df, week_number, campaign_type):
     else:
         campaign = date_range
 
-    ft_data = pd.DataFrame({
-        "Date": df["Date"],
-        "Campaign": campaign,
-        "Store": df.get("Store"),
-        "Product": df.get("Product"),
-        "Ad Size": df.get("Ad Size"),
-        "Clicks": df["Clicks"],
-    })
+    if client == "USM":
+        ft_data = pd.DataFrame({
+            "Date": df["Date"],
+            "Brand": df.get("Brand"),
+            "Promotion Code": df.get("Promotion Code"),
+            "Products": df.get("Product"),
+            "Category": df.get("Category"),
+            "Ad Size": df.get("Ad Size"),
+            "Click Tag": df.get("Click Tag"),
+            "Clicks": df["Clicks"],
+        })
+    else:
+        ft_data = pd.DataFrame({
+            "Date": df["Date"],
+            "Campaign": campaign,
+            "Store": df.get("Store"),
+            "Product": df.get("Product"),
+            "Ad Size": df.get("Ad Size"),
+            "Clicks": df["Clicks"],
+        })
 
     return ft_data, campaign

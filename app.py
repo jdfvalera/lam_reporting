@@ -344,6 +344,14 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     st.markdown("### Preview — Final Click Tag Output")
     st.dataframe(final_clicks, use_container_width=True)
 
+    st.markdown("### Preview — DV360 Data")
+    if isinstance(dv360_data, dict):
+        for sheet_name, sheet_df in dv360_data.items():
+            st.markdown(f"**{sheet_name}**")
+            st.dataframe(sheet_df, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(dv360_data, use_container_width=True, hide_index=True)
+
     # -----------------------------
     # INTERNAL CS EXPORT
     # -----------------------------

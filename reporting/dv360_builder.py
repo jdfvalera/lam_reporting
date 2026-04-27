@@ -187,10 +187,12 @@ def _parse_bottlemart_zone(io_str):
 
 def _build_bottlemart_dv360(df, campaign):
     df["Zone"] = df["Insertion Order"].apply(_parse_bottlemart_zone)
+    df["Store"] = df["Insertion Order"].astype(str).str.split("_").str[-1]
 
     return pd.DataFrame({
         "Date":             df["Date"],
         "Campaign":         campaign,
+        "Store":            df["Store"],
         "Zone":             df["Zone"],
         "Demographics":     df["Line Item"],
         "Creative Size":    df["Creative Size"],

@@ -13,14 +13,15 @@ from dashboard.areas import show_area_performance
 from dashboard.products import show_products
 from dashboard.creatives import show_creatives
 
-from processors import usm, redners, mccaffreys
+from processors import usm, redners, mccaffreys, bottlemart
 from processors.base import generic_process
 
 
 PROCESSORS = {
     "USM": usm,
     "Redner's": redners,
-    "McCaffrey's": mccaffreys
+    "McCaffrey's": mccaffreys,
+    "Bottlemart": bottlemart,
 }
 
 PALETTES = {
@@ -107,9 +108,11 @@ if brand == "Custom":
     week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
     campaign_type = st.text_input("Campaign Type (e.g. Regular Ad, Sale)")
 
-elif brand in ("USM", "Redner's", "McCaffrey's"):
+elif brand in ("USM", "Redner's", "McCaffrey's", "Bottlemart"):
     week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
     if brand == "McCaffrey's":
+        campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
+    elif brand == "Bottlemart":
         campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
 
 ft_file = st.file_uploader("FT File", type=["xlsx"])

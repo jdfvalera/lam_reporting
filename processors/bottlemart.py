@@ -3,50 +3,32 @@ from .base import generic_process
 
 
 # --------------------------------------------------
-# Products to exclude
-# --------------------------------------------------
-EXCLUDED_PRODUCTS = {
-    "Opening Frame",
-    "End Frame",
-}
-
-
-# --------------------------------------------------
 # Core Processing
 # --------------------------------------------------
+def _parse_zone(placement):
+    """'QLD_Zone 01 - Apr 8 - 21_300x250' → 'Zone 01'"""
+    if not isinstance(placement, str):
+        return None
+    parts = placement.split("_", 2)
+    if len(parts) < 2:
+        return None
+    return parts[1].split(" - ")[0].strip()
+
+
 def process(
     df: pd.DataFrame,
     guide_df: pd.DataFrame | None = None
 ) -> pd.DataFrame:
 
-    # Use generic engine first
     long_df, unmapped_df = generic_process(df, guide_df)
 
     # -------------------------------
-    # Parse Store from Version
+    # Parse Zone from Placement
     # -------------------------------
-    if "Version" in long_df.columns:
-        long_df["Store"] = (
-            long_df["Version"]
-            .astype(str)
-            .str.replace("_", " ")
-        )
+    if "Placement" in long_df.columns:
+        long_df["Zone"] = long_df["Placement"].apply(_parse_zone)
     else:
-        long_df["Store"] = None
-        
-    # -------------------------------
-    # Remove default stores
-    # -------------------------------
-    # long_df = long_df[long_df["Store"] != "default"]
-
-    # -------------------------------
-    # Exclude Opening / End Frames
-    # -------------------------------
-    if "Product" in long_df.columns:
-        long_df["Product"] = long_df["Product"].astype(str).str.strip()
-        long_df = long_df[
-            ~long_df["Product"].isin(EXCLUDED_PRODUCTS)
-        ]
+        long_df["Zone"] = None
 
     return long_df, unmapped_df
 
@@ -62,21 +44,19 @@ def build_final_export(
 ) -> pd.DataFrame:
 
     if week_number is None:
-        raise ValueError("McCaffrey's requires a Week Number.")
+        raise ValueError("Bottlemart requires a Week Number.")
 
     if campaign_type is None:
-        raise ValueError("McCaffrey's requires a Campaign Type.")
+        raise ValueError("Bottlemart requires a Campaign Type.")
 
     df = df.copy()
 
-    # Ensure Date is datetime
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
 
     start = df["Date"].min()
     end = df["Date"].max()
 
-    # Format: "Jan 23 - Feb 5"
     if start.month == end.month:
         date_range = f"{start.strftime('%b')} {start.day} - {end.day}"
     else:
@@ -87,8 +67,8 @@ def build_final_export(
     return pd.DataFrame({
         "Date": df["Date"],
         "Campaign": campaign,
-        "Store": df["Store"],
-        "Product": df["Product"],
+        "Zone": df.get("Zone"),
+        "Product": df.get("Product"),
         "Ad Size": df.get("Ad Size"),
         "Clicks": df["Clicks"],
     })

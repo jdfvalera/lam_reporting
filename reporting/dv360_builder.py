@@ -172,6 +172,36 @@ def _build_redners_dv360(df, week_number):
 
 
 # --------------------------------------------------
+# Bottlemart helpers
+# --------------------------------------------------
+def _parse_bottlemart_zone(io_str):
+    """'Z1_something' → 'Zone 01'"""
+    if not isinstance(io_str, str):
+        return None
+    token = io_str.split("_")[0].strip().upper()
+    m = re.match(r"^Z(\d+)$", token)
+    if m:
+        return f"Zone {int(m.group(1)):02d}"
+    return None
+
+
+def _build_bottlemart_dv360(df, campaign):
+    df["Zone"] = df["Insertion Order"].apply(_parse_bottlemart_zone)
+
+    return pd.DataFrame({
+        "Date":             df["Date"],
+        "Campaign":         campaign,
+        "Zone":             df["Zone"],
+        "Demographics":     df["Line Item"],
+        "Creative Size":    df["Creative Size"],
+        "Device Type":      df["Device Type"],
+        "Impressions":      df["Impressions"],
+        "Clicks":           df["Clicks"],
+        "Click Rate (CTR)": df["Click Rate (CTR)"],
+    })
+
+
+# --------------------------------------------------
 # Public entry point
 # --------------------------------------------------
 def build_dv360_data(habanero_df, campaign, region, client=None, week_number=None):
@@ -186,6 +216,9 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
 
     if client == "Redner's":
         return _build_redners_dv360(df, week_number)
+
+    if client == "Bottlemart":
+        return _build_bottlemart_dv360(df, campaign)
 
     # Generic (all other clients)
     df["Store"] = (

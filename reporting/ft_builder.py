@@ -10,6 +10,8 @@ def build_ft_data(df, week_number, campaign_type, client=None):
     start = df["Date"].min()
     end = df["Date"].max()
 
+    df["Date"] = df["Date"].dt.strftime("%Y/%m/%d")
+
     if start.month == end.month:
         date_range = f"{start.strftime('%b %-d')} - {end.strftime('%-d')}"
     else:

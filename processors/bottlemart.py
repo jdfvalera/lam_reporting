@@ -65,7 +65,7 @@ def build_final_export(
     campaign = f"W{week_number} {campaign_type}_{date_range}"
 
     return pd.DataFrame({
-        "Date": df["Date"],
+        "Date": df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign": campaign,
         "Zone": df.get("Zone"),
         "Product": df.get("Product"),

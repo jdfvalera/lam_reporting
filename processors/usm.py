@@ -186,6 +186,8 @@ def apply_category_map(df: pd.DataFrame, category_map: dict) -> pd.DataFrame:
 # Final export
 # --------------------------------------------------
 def build_final_export(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    df = df.copy()
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y/%m/%d")
     return pd.DataFrame({
         "Date": df["Date"],
         "Brand": df["Brand"],

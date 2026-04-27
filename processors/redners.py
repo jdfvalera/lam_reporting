@@ -154,7 +154,7 @@ def build_final_export(
     week_label = f"Week {week_number}: {date_range}"
 
     return pd.DataFrame({
-        "Date": df["Date"],
+        "Date": df["Date"].dt.strftime("%Y/%m/%d"),
         "Week": week_label,
         "Version": df["Version"],
         "Store": df["Store"],

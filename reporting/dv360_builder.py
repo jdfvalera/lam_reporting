@@ -83,6 +83,7 @@ def _build_usm_dv360(df):
     # --- Table 1: Daily summary ---
     t1 = _agg(df, ["Date"])
     t1.columns = ["Date (adjusted)", "Impressions", "Clicks", "CTR (%)"]
+    t1["Date (adjusted)"] = t1["Date (adjusted)"].dt.strftime("%Y/%m/%d")
 
     # --- Table 2: Gender breakdown ---
     t2 = _agg(df, ["Gender"])
@@ -96,10 +97,12 @@ def _build_usm_dv360(df):
     # --- Table 4: Store detail by date ---
     t4 = _agg(df, ["Date", "Brand", "Store No.", "Area"])
     t4.columns = ["Date", "Brand", "Store No.", "Area", "Impressions", "Clicks", "Click Rate (CTR)"]
+    t4["Date"] = t4["Date"].dt.strftime("%Y/%m/%d")
 
     # --- Table 6: Daily by Ad Size ---
     t6 = _agg(df, ["Date", "Creative Size"])
     t6.columns = ["Date", "Creative Size", "Impressions", "Clicks", "Click Rate (CTR)"]
+    t6["Date"] = t6["Date"].dt.strftime("%Y/%m/%d")
 
     # --- Table 7: Area totals (campaign period) ---
     t7 = _agg(df, ["Area"])
@@ -157,7 +160,7 @@ def _build_redners_dv360(df, week_number):
     week_label = f"Week {week_number}: {date_range}"
 
     return pd.DataFrame({
-        "Date":             df["Date"],
+        "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
         "Week":             week_label,
         "Version":          df["Version"],
         "State":            df["State"],
@@ -190,7 +193,7 @@ def _build_bottlemart_dv360(df, campaign):
     df["Store"] = df["Insertion Order"].astype(str).str.split("_").str[-1]
 
     return pd.DataFrame({
-        "Date":             df["Date"],
+        "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign":         campaign,
         "Store":            df["Store"],
         "Zone":             df["Zone"],
@@ -231,7 +234,7 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
     )
 
     return pd.DataFrame({
-        "Date":             df["Date"],
+        "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign":         campaign,
         "Store":            df["Store"],
         "Demographics":     df["Line Item"],

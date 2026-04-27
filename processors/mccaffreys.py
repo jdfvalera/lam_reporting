@@ -74,6 +74,7 @@ def build_final_export(
     df = df.dropna(subset=["Date"])
 
     start = df["Date"].min()
+
     end = df["Date"].max()
 
     # Format: "Jan 23 - Feb 5"
@@ -85,7 +86,7 @@ def build_final_export(
     campaign = f"W{week_number} {campaign_type}_{date_range}"
 
     return pd.DataFrame({
-        "Date": df["Date"],
+        "Date": df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign": campaign,
         "Store": df["Store"],
         "Product": df["Product"],

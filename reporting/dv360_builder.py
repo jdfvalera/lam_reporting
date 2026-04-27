@@ -216,6 +216,11 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
     if region == "US":
         df["Date"] = df["Date"] - pd.Timedelta(days=1)
 
+    if "Click Rate (CTR)" in df.columns:
+        df["Click Rate (CTR)"] = df["Click Rate (CTR)"].apply(
+            lambda v: f"{float(v) * 100:.2f}%" if pd.notna(v) else v
+        )
+
     if client == "USM":
         return _build_usm_dv360(df)
 

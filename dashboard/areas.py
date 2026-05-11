@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 from charts.area_charts import area_chart
 
@@ -13,10 +14,11 @@ def show_area_performance(df, palette):
     area["CTR"] = area["Clicks"] / area["Impressions"]
     area_sorted = area.sort_values("Impressions", ascending=False)
 
+    dates = pd.to_datetime(df["Date"], format="%Y/%m/%d")
     date_label = (
-        df["Date"].min().strftime("%b %d")
+        dates.min().strftime("%b %d")
         + " – "
-        + df["Date"].max().strftime("%b %d")
+        + dates.max().strftime("%b %d")
     )
 
     left, right = st.columns([1.4, 1])

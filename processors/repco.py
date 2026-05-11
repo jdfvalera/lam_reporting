@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 from .base import generic_process, build_campaign_label
 
@@ -5,30 +6,18 @@ from .base import generic_process, build_campaign_label
 # --------------------------------------------------
 # Core Processing
 # --------------------------------------------------
-def _parse_zone(placement):
-    """'QLD_Zone 01 - Apr 8 - 21_300x250' → 'Zone 01'"""
-    if not isinstance(placement, str):
-        return None
-    parts = placement.split("_", 2)
-    if len(parts) < 2:
-        return None
-    return parts[1].split(" - ")[0].strip()
-
-
 def process(
     df: pd.DataFrame,
     guide_df: pd.DataFrame | None = None
-) -> pd.DataFrame:
+) -> tuple:
 
-    long_df, unmapped_df = generic_process(df, guide_df)
+    result = generic_process(df, guide_df)
 
-    # -------------------------------
-    # Parse Zone from Placement
-    # -------------------------------
-    if "Placement" in long_df.columns:
-        long_df["Zone"] = long_df["Placement"].apply(_parse_zone)
+    if isinstance(result, tuple):
+        long_df, unmapped_df = result
     else:
-        long_df["Zone"] = None
+        long_df = result
+        unmapped_df = pd.DataFrame()
 
     return long_df, unmapped_df
 
@@ -42,9 +31,6 @@ def build_final_export(
     campaign_type: str | None = None,
     **kwargs
 ) -> pd.DataFrame:
-
-    if campaign_type is None:
-        raise ValueError("Bottlemart requires a Campaign Type.")
 
     df = df.copy()
 
@@ -61,11 +47,13 @@ def build_final_export(
 
     campaign = build_campaign_label(date_range, campaign_type, week_number)
 
+    store = re.sub(r"\s*store\s*$", "", campaign_type, flags=re.IGNORECASE).strip() if campaign_type else None
+
     return pd.DataFrame({
         "Date": df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign": campaign,
-        "Zone": df.get("Zone"),
-        "Product": df.get("Product"),
+        "Store": store,
         "Ad Size": df.get("Ad Size"),
+        "Product": df.get("Product"),
         "Clicks": df["Clicks"],
     })

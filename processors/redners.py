@@ -4,7 +4,7 @@ from .base import default_clicktag_longform
 
 
 # --------------------------------------------------
-# Core processing
+# Core processing — FT
 # --------------------------------------------------
 def process(
     df: pd.DataFrame,
@@ -124,6 +124,134 @@ def process(
     enriched = enriched[enriched["Product Name"] != ""]
 
     return enriched, unmapped_df
+
+
+# --------------------------------------------------
+# GS file helpers
+# --------------------------------------------------
+def read_gs_data_sheet(xls: pd.ExcelFile) -> pd.DataFrame:
+    """Read the GS 'Data' sheet, auto-detecting the actual header row."""
+    raw = pd.read_excel(xls, sheet_name="Data", header=None)
+    header_row = None
+    for i, row in raw.iterrows():
+        if str(row.iloc[0]).strip() == "Date":
+            header_row = i
+            break
+    if header_row is None:
+        raise ValueError("Could not find 'Date' header row in GS Data sheet.")
+    return pd.read_excel(xls, sheet_name="Data", header=header_row)
+
+
+# --------------------------------------------------
+# Core processing — GS
+# --------------------------------------------------
+def process_gs(
+    data_df: pd.DataFrame,
+    product_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Process a Redner's GS Product Clicks file.
+
+    data_df   — the 'Data' sheet read via read_gs_data_sheet()
+    product_df — the 'Sheet1' product lookup (Product No., LIST OF PRODUCTS, Store)
+    """
+    df = data_df.copy()
+
+    # -------------------------------
+    # DV360 Insertion Order → Version, Store
+    # e.g. "S10_PA_Ephrata" → Version="S10", Store="Ephrata"
+    # -------------------------------
+    def parse_insertion_order(val):
+        if not isinstance(val, str):
+            return pd.Series({"Version": None, "Store": None})
+        parts = [p.strip() for p in val.split("_")]
+        return pd.Series({"Version": parts[0].upper(), "Store": parts[-1]})
+
+    parsed = df["DV360 Insertion Order"].apply(parse_insertion_order)
+    df["Version"] = parsed["Version"]
+    df["Store"] = parsed["Store"]
+
+    # -------------------------------
+    # Rich Media Event → Click Tag
+    # e.g. "Exit : Product_1" → "Product_1"
+    #      "Exit : end"       → "end"
+    #      "Exit : opening"   → "opening"
+    # -------------------------------
+    df["Click Tag"] = (
+        df["Rich Media Event"]
+        .astype(str)
+        .str.replace(r"^Exit\s*:\s*", "", regex=True)
+        .str.strip()
+    )
+
+    # -------------------------------
+    # Ad Size
+    # -------------------------------
+    def clean_ad_size(val):
+        if not isinstance(val, str):
+            return None
+        m = re.search(r"\d+\s*x\s*\d+", val)
+        return m.group(0).replace(" ", "") if m else None
+
+    df["Ad Size"] = df["Creative Pixel Size"].apply(clean_ad_size)
+
+    # -------------------------------
+    # Clicks
+    # -------------------------------
+    df["Clicks"] = pd.to_numeric(df["Exits"], errors="coerce").fillna(0).astype(int)
+
+    # -------------------------------
+    # Date
+    # -------------------------------
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
+
+    # -------------------------------
+    # Build product lookup
+    # {(product_no: int, store_key: "Dundalk"|"Others"): product_name}
+    # -------------------------------
+    product_lookup: dict[tuple[int, str], str] = {}
+    for _, row in product_df.iterrows():
+        try:
+            no = int(row["Product No."])
+        except (ValueError, TypeError):
+            continue
+        store_key = str(row["Store"]).strip()
+        product_lookup[(no, store_key)] = str(row["LIST OF PRODUCTS"]).strip()
+
+    # -------------------------------
+    # Map Click Tag → Product Name
+    # -------------------------------
+    _SPECIAL = {
+        "end": "End Frame",
+        "opening": "Opening Frame",
+    }
+
+    def get_product_name(click_tag: str, store: str) -> str | None:
+        ct = str(click_tag).strip()
+        lower = ct.lower()
+        if lower in _SPECIAL:
+            return _SPECIAL[lower]
+        m = re.search(r"(\d+)$", ct)
+        if m:
+            no = int(m.group(1))
+            key = "Dundalk" if str(store).strip() == "Dundalk" else "Others"
+            return product_lookup.get((no, key))
+        return None
+
+    df["Product Name"] = df.apply(
+        lambda r: get_product_name(r["Click Tag"], r["Store"]), axis=1
+    )
+
+    # -------------------------------
+    # Split mapped / unmapped
+    # -------------------------------
+    unmapped_df = df[df["Product Name"].isna()].copy()
+    mapped_df = df.dropna(subset=["Product Name"]).copy()
+    mapped_df["Product Name"] = mapped_df["Product Name"].str.strip()
+
+    out_cols = ["Date", "Version", "Store", "Ad Size", "Click Tag", "Product Name", "Clicks"]
+    return mapped_df[out_cols], unmapped_df[out_cols]
 
 
 def build_final_export(

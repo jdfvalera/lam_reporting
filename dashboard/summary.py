@@ -57,10 +57,11 @@ def show_summary(df, target_impressions, target_clicks, target_ctr, palette):
         st.dataframe(styled, use_container_width=True)
 
     with right:
+        dates = pd.to_datetime(df["Date"], format="%Y/%m/%d")
         date_label = (
-            df["Date"].min().strftime("%b %d")
+            dates.min().strftime("%b %d")
             + " - "
-            + df["Date"].max().strftime("%b %d")
+            + dates.max().strftime("%b %d")
         )
         fig = overview_chart(impressions, clicks, ctr, date_label, palette)
         st.pyplot(fig)

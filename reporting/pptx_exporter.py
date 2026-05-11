@@ -246,8 +246,9 @@ def _summary_slide(prs, dv360_data, target_impressions, target_clicks,
     r_start = Inches(5.8)
     r_w     = SW - r_start - PAD
 
-    date_label = (dv360_data["Date"].min().strftime("%b %d")
-                  + " – " + dv360_data["Date"].max().strftime("%b %d"))
+    dates = pd.to_datetime(dv360_data["Date"])
+    date_label = (dates.min().strftime("%b %d")
+                  + " – " + dates.max().strftime("%b %d"))
 
     _add_insight_box(slide, f"Campaign Highlights ({date_label})", highlights,
                      PAD, content_top, left_w - PAD, Inches(2.7), palette)
@@ -272,8 +273,9 @@ def _demographics_slide(prs, dv360_data, insights, campaign_name, palette):
     r_start = Inches(5.8)
     r_w     = SW - r_start - PAD
 
-    date_label = (dv360_data["Date"].min().strftime("%b %d")
-                  + " – " + dv360_data["Date"].max().strftime("%b %d"))
+    dates = pd.to_datetime(dv360_data["Date"])
+    date_label = (dates.min().strftime("%b %d")
+                  + " – " + dates.max().strftime("%b %d"))
 
     rows = []
     for name, row in demo.iterrows():
@@ -308,8 +310,9 @@ def _area_slide(prs, dv360_data, insights, campaign_name, palette):
     r_start = Inches(7.5)
     r_w     = SW - r_start - PAD
 
-    date_label = (dv360_data["Date"].min().strftime("%b %d")
-                  + " – " + dv360_data["Date"].max().strftime("%b %d"))
+    dates = pd.to_datetime(dv360_data["Date"])
+    date_label = (dates.min().strftime("%b %d")
+                  + " – " + dates.max().strftime("%b %d"))
 
     fig = area_chart(area_df, palette)
     _add_picture(slide, fig, PAD, content_top, chart_w - PAD, SH - content_top - PAD)
@@ -384,8 +387,9 @@ def _creatives_slide(prs, dv360_data, insights, campaign_name, palette):
 
     insight_top = content_top + tbl_h + Inches(0.2)
     insight_h   = SH - insight_top - PAD
-    date_label  = (dv360_data["Date"].min().strftime("%b %d")
-                   + " – " + dv360_data["Date"].max().strftime("%b %d"))
+    dates = pd.to_datetime(dv360_data["Date"])
+    date_label  = (dates.min().strftime("%b %d")
+                   + " – " + dates.max().strftime("%b %d"))
     _add_insight_box(slide, f"Creative Performance ({date_label})", insights,
                      PAD, insight_top, left_w - PAD, max(insight_h, Inches(1.0)), palette)
 

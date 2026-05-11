@@ -32,6 +32,7 @@ def default_clicktag_longform(df: pd.DataFrame) -> pd.DataFrame:
     return long_df
 
 
+
 # --------------------------------------------------
 # Generic Processor (with optional guide)
 # --------------------------------------------------
@@ -104,6 +105,29 @@ def generic_process(
     enriched.dropna(inplace=True, subset=["Product"])
 
     return enriched, unmapped_df
+
+
+# --------------------------------------------------
+# Campaign label builder
+# --------------------------------------------------
+def build_campaign_label(
+    date_range: str,
+    campaign_name: str | None = None,
+    week_number: int | None = None,
+) -> str:
+    """
+    W{N}_{campaign_name}_{date_range}  — with week number
+    {campaign_name}_{date_range}       — without week number
+    W{N}_{date_range}                  — without campaign name
+    {date_range}                       — neither
+    """
+    if week_number is not None and campaign_name:
+        return f"W{week_number}_{campaign_name}_{date_range}"
+    elif campaign_name:
+        return f"{campaign_name}_{date_range}"
+    elif week_number is not None:
+        return f"W{week_number}_{date_range}"
+    return date_range
 
 
 # --------------------------------------------------

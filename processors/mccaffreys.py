@@ -1,5 +1,5 @@
 import pandas as pd
-from .base import generic_process
+from .base import generic_process, build_campaign_label
 
 
 # --------------------------------------------------
@@ -61,29 +61,23 @@ def build_final_export(
     **kwargs
 ) -> pd.DataFrame:
 
-    if week_number is None:
-        raise ValueError("McCaffrey's requires a Week Number.")
-
     if campaign_type is None:
         raise ValueError("McCaffrey's requires a Campaign Type.")
 
     df = df.copy()
 
-    # Ensure Date is datetime
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
 
     start = df["Date"].min()
-
     end = df["Date"].max()
 
-    # Format: "Jan 23 - Feb 5"
     if start.month == end.month:
         date_range = f"{start.strftime('%b')} {start.day} - {end.day}"
     else:
         date_range = f"{start.strftime('%b')} {start.day} - {end.strftime('%b')} {end.day}"
 
-    campaign = f"W{week_number} {campaign_type}_{date_range}"
+    campaign = build_campaign_label(date_range, campaign_type, week_number)
 
     return pd.DataFrame({
         "Date": df["Date"].dt.strftime("%Y/%m/%d"),

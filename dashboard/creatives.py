@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 from charts.creative_charts import creative_chart
 
@@ -13,10 +14,11 @@ def show_creatives(df, palette):
     creative["CTR"] = creative["Clicks"] / creative["Impressions"]
     creative_sorted = creative.sort_values("Clicks", ascending=False)
 
+    dates = pd.to_datetime(df["Date"], format="%Y/%m/%d")
     date_label = (
-        df["Date"].min().strftime("%b %d")
+        dates.min().strftime("%b %d")
         + " – "
-        + df["Date"].max().strftime("%b %d")
+        + dates.max().strftime("%b %d")
     )
 
     left, right = st.columns([1, 1.4])

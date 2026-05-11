@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 from charts.demographic_charts import demographic_chart
 
@@ -12,10 +13,11 @@ def show_demographics(df, palette):
     )
     demo["CTR"] = demo["Clicks"] / demo["Impressions"]
 
+    dates = pd.to_datetime(df["Date"], format="%Y/%m/%d")
     date_label = (
-        df["Date"].min().strftime("%b %d")
+        dates.min().strftime("%b %d")
         + " – "
-        + df["Date"].max().strftime("%b %d")
+        + dates.max().strftime("%b %d")
     )
 
     left, right = st.columns([1, 1.4])

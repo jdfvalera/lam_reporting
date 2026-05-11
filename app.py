@@ -13,7 +13,7 @@ from dashboard.areas import show_area_performance
 from dashboard.products import show_products
 from dashboard.creatives import show_creatives
 
-from processors import usm, redners, mccaffreys, bottlemart
+from processors import usm, redners, mccaffreys, bottlemart, wrays, repco
 from processors.base import generic_process
 
 
@@ -22,6 +22,13 @@ PROCESSORS = {
     "Redner's": redners,
     "McCaffrey's": mccaffreys,
     "Bottlemart": bottlemart,
+    "Wray's": wrays,
+    "Repco": repco,
+}
+
+PROCESSOR_REGIONS = {
+    "Bottlemart": "AU",
+    "Repco": "AU",
 }
 
 PALETTES = {
@@ -79,69 +86,77 @@ for key, default in {
 st.title("CS Reporting Pipeline")
 st.divider()
 
-# --------------------------------------------------
-# HABANERO INPUTS
-# --------------------------------------------------
-st.header("Habanero Inputs")
+col1, col2, col3 = st.columns(3)
 
-client = st.text_input("Client Name")
-report_number = st.text_input("Report Number")
-region = st.selectbox("Region", ["US", "AU"])
-weekly_file = st.file_uploader("Weekly Data Pull", type=["xlsx"])
-frequency_file = st.file_uploader("Frequency File", type=["xlsx"])
+# --------------------------------------------------
+# COLUMN 1: HABANERO INPUTS
+# --------------------------------------------------
+with col1:
+    st.header("Habanero Inputs")
+    client = st.text_input("Client Name")
+    report_number = st.text_input("Report Number")
+    weekly_file = st.file_uploader("Weekly Data Pull", type=["xlsx"])
+    frequency_file = st.file_uploader("Frequency File", type=["xlsx"])
+
+# --------------------------------------------------
+# COLUMN 2: PRODUCT CLICKS INPUTS
+# --------------------------------------------------
+with col2:
+    st.header("Product Clicks Inputs")
+
+    brand = st.selectbox("Brand / Processor", list(PROCESSORS.keys()) + ["Custom"])
+
+    if brand == "Custom":
+        region = st.selectbox("Region", ["US", "AU"])
+    else:
+        region = PROCESSOR_REGIONS.get(brand, "US")
+
+    custom_brand_name = None
+    week_number = None
+    campaign_type = None
+
+    if brand == "Custom":
+        custom_brand_name = st.text_input("Brand Name")
+        week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1, value=None, placeholder="Optional")
+        campaign_type = st.text_input("Campaign Type (e.g. Regular Ad, Sale)")
+
+    elif brand in ("Redner's", "McCaffrey's", "Bottlemart", "Wray's", "Repco"):
+        week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1, value=None, placeholder="Optional")
+        if brand == "McCaffrey's":
+            campaign_type = st.selectbox("Campaign Type", ["Sale", "Weekly", "Family Focus"])
+        elif brand in ("Bottlemart", "Wray's", "Repco"):
+            campaign_type = st.text_input("Campaign Type (e.g. Weekly, Sale)")
+
+    redners_mode = "FT Only"
+    if brand == "Redner's":
+        redners_mode = st.selectbox("Mode", ["FT Only", "GS Only", "FT & GS"])
+
+    _needs_ft = brand != "Redner's" or redners_mode in ("FT Only", "FT & GS")
+    _needs_gs = brand == "Redner's" and redners_mode in ("GS Only", "FT & GS")
+
+    ft_file = st.file_uploader("FT File", type=["xlsx"]) if _needs_ft else None
+    gs_file = st.file_uploader("GS File", type=["xlsx"]) if _needs_gs else None
+
+# --------------------------------------------------
+# COLUMN 3: CAMPAIGN TARGETS + REPORT SETTINGS
+# --------------------------------------------------
+with col3:
+    st.header("Campaign Targets")
+    target_impressions = st.number_input("Target Impressions", min_value=0)
+    target_ctr = st.number_input("Target CTR (%)", min_value=0.0, step=0.01) / 100
+    target_clicks = int(target_impressions * target_ctr)
+
+    st.divider()
+
+    st.header("Report Settings")
+    palette_name = st.selectbox("Color Palette", list(PALETTES.keys()))
+    palette = PALETTES[palette_name]
+    logo_file = st.file_uploader(
+        "Client Logo for PPT title slide (optional — PNG or JPG)",
+        type=["png", "jpg", "jpeg"],
+    )
 
 st.divider()
-
-# --------------------------------------------------
-# PRODUCT CLICKS INPUTS
-# --------------------------------------------------
-st.header("Product Clicks Inputs")
-
-brand = st.selectbox("Brand / Processor", list(PROCESSORS.keys()) + ["Custom"])
-
-custom_brand_name = None
-week_number = None
-campaign_type = None
-
-if brand == "Custom":
-    custom_brand_name = st.text_input("Brand Name")
-    week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
-    campaign_type = st.text_input("Campaign Type (e.g. Regular Ad, Sale)")
-
-elif brand in ("USM", "Redner's", "McCaffrey's", "Bottlemart"):
-    week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1)
-    if brand == "McCaffrey's":
-        campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
-    elif brand == "Bottlemart":
-        campaign_type = st.selectbox("Campaign Type", ["Weekly", "Sale"])
-
-ft_file = st.file_uploader("FT File", type=["xlsx"])
-
-st.divider()
-
-# --------------------------------------------------
-# CAMPAIGN TARGETS
-# --------------------------------------------------
-st.header("Campaign Targets")
-
-target_impressions = st.number_input("Target Impressions", min_value=0)
-target_ctr = st.number_input("Target CTR (%)", min_value=0.0, step=0.01) / 100
-target_clicks = int(target_impressions * target_ctr)
-
-st.divider()
-
-# --------------------------------------------------
-# REPORT SETTINGS  (always visible — affects live dashboard + PPT)
-# --------------------------------------------------
-st.header("Report Settings")
-
-palette_name = st.selectbox("Color Palette", list(PALETTES.keys()))
-palette = PALETTES[palette_name]
-
-logo_file = st.file_uploader(
-    "Client Logo for PPT title slide (optional — PNG or JPG)",
-    type=["png", "jpg", "jpeg"],
-)
 
 # --------------------------------------------------
 # STAGE: idle — show Generate button
@@ -173,8 +188,16 @@ if st.session_state.stage == "idle":
         st.rerun()
 
     if run_full:
-        if not all([weekly_file, frequency_file, ft_file, client, report_number]):
+        if not all([weekly_file, frequency_file, client, report_number]):
             st.error("Please upload all required files.")
+            st.stop()
+
+        if _needs_ft and not ft_file:
+            st.error("Please upload the FT file.")
+            st.stop()
+
+        if _needs_gs and not gs_file:
+            st.error("Please upload the GS file.")
             st.stop()
 
         if brand == "Custom" and not custom_brand_name:
@@ -204,25 +227,53 @@ if st.session_state.stage == "idle":
         st.success("Habanero report generated.")
 
         # PRODUCT CLICKS
-        xls = pd.ExcelFile(ft_file)
-        wide_df = pd.read_excel(xls, sheet_name=0)
-        guide_df = pd.read_excel(xls, sheet_name=1) if len(xls.sheet_names) > 1 else None
-
         processor = PROCESSORS.get(brand)
-
         unmapped_df = pd.DataFrame()
-        if processor:
-            result = processor.process(wide_df, guide_df)
-            if isinstance(result, tuple):
-                long_df, unmapped_df = result
-            else:
-                long_df = result
+
+        if brand == "Redner's":
+            ft_long = None
+            gs_long = None
+            ft_unmapped = pd.DataFrame()
+            gs_unmapped = pd.DataFrame()
+
+            if _needs_ft:
+                xls = pd.ExcelFile(ft_file)
+                wide_df = pd.read_excel(xls, sheet_name=0)
+                guide_df = pd.read_excel(xls, sheet_name=1) if len(xls.sheet_names) > 1 else None
+                result = redners.process(wide_df, guide_df)
+                if isinstance(result, tuple):
+                    ft_long, ft_unmapped = result
+                else:
+                    ft_long = result
+
+            if _needs_gs:
+                gs_xls = pd.ExcelFile(gs_file)
+                data_df = redners.read_gs_data_sheet(gs_xls)
+                product_df = pd.read_excel(gs_xls, sheet_name="Sheet1")
+                gs_long, gs_unmapped = redners.process_gs(data_df, product_df)
+
+            parts = [p for p in [ft_long, gs_long] if p is not None]
+            long_df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+            unmapped_parts = [p for p in [ft_unmapped, gs_unmapped] if p is not None and not p.empty]
+            unmapped_df = pd.concat(unmapped_parts, ignore_index=True) if unmapped_parts else pd.DataFrame()
+
         else:
-            result = generic_process(wide_df, guide_df)
-            if isinstance(result, tuple):
-                long_df, unmapped_df = result
+            xls = pd.ExcelFile(ft_file)
+            wide_df = pd.read_excel(xls, sheet_name=0)
+            guide_df = pd.read_excel(xls, sheet_name=1) if len(xls.sheet_names) > 1 else None
+
+            if processor:
+                result = processor.process(wide_df, guide_df)
+                if isinstance(result, tuple):
+                    long_df, unmapped_df = result
+                else:
+                    long_df = result
             else:
-                long_df = result
+                result = generic_process(wide_df, guide_df)
+                if isinstance(result, tuple):
+                    long_df, unmapped_df = result
+                else:
+                    long_df = result
 
         st.session_state.unmapped_df = unmapped_df
 

@@ -5,30 +5,24 @@ from .base import generic_process, build_campaign_label
 # --------------------------------------------------
 # Core Processing
 # --------------------------------------------------
-def _parse_zone(placement):
-    """'QLD_Zone 01 - Apr 8 - 21_300x250' → 'Zone 01'"""
-    if not isinstance(placement, str):
-        return None
-    parts = placement.split("_", 2)
-    if len(parts) < 2:
-        return None
-    return parts[1].split(" - ")[0].strip()
-
-
 def process(
     df: pd.DataFrame,
     guide_df: pd.DataFrame | None = None
-) -> pd.DataFrame:
+) -> tuple:
 
-    long_df, unmapped_df = generic_process(df, guide_df)
+    result = generic_process(df, guide_df)
 
-    # -------------------------------
-    # Parse Zone from Placement
-    # -------------------------------
-    if "Placement" in long_df.columns:
-        long_df["Zone"] = long_df["Placement"].apply(_parse_zone)
+    if isinstance(result, tuple):
+        long_df, unmapped_df = result
     else:
-        long_df["Zone"] = None
+        long_df = result
+        unmapped_df = pd.DataFrame()
+
+    # Version column contains store names (e.g. Chalet, MarketSelah, MeadowBrook)
+    if "Version" in long_df.columns:
+        long_df = long_df.rename(columns={"Version": "Store"})
+    if not unmapped_df.empty and "Version" in unmapped_df.columns:
+        unmapped_df = unmapped_df.rename(columns={"Version": "Store"})
 
     return long_df, unmapped_df
 
@@ -42,9 +36,6 @@ def build_final_export(
     campaign_type: str | None = None,
     **kwargs
 ) -> pd.DataFrame:
-
-    if campaign_type is None:
-        raise ValueError("Bottlemart requires a Campaign Type.")
 
     df = df.copy()
 
@@ -64,8 +55,8 @@ def build_final_export(
     return pd.DataFrame({
         "Date": df["Date"].dt.strftime("%Y/%m/%d"),
         "Campaign": campaign,
-        "Zone": df.get("Zone"),
-        "Product": df.get("Product"),
+        "Store": df.get("Store"),
         "Ad Size": df.get("Ad Size"),
+        "Product": df.get("Product"),
         "Clicks": df["Clicks"],
     })

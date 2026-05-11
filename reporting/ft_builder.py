@@ -1,4 +1,5 @@
 import pandas as pd
+from processors.base import build_campaign_label
 
 
 def build_ft_data(df, week_number, campaign_type, client=None):
@@ -17,12 +18,7 @@ def build_ft_data(df, week_number, campaign_type, client=None):
     else:
         date_range = f"{start.strftime('%b %-d')} - {end.strftime('%b %-d')}"
 
-    if week_number is not None and campaign_type:
-        campaign = f"W{week_number} {campaign_type}_{date_range}"
-    elif week_number is not None:
-        campaign = f"W{week_number}_{date_range}"
-    else:
-        campaign = date_range
+    campaign = build_campaign_label(date_range, campaign_type, week_number)
 
     if client == "USM":
         ft_data = pd.DataFrame({

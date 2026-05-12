@@ -207,6 +207,25 @@ def _build_bottlemart_dv360(df, campaign):
 
 
 # --------------------------------------------------
+# Detwilers builder
+# --------------------------------------------------
+def _build_detwilers_dv360(df):
+    df["Store"] = df["Insertion Order"].astype(str).str.split("_").str[-1]
+
+    return pd.DataFrame({
+        "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
+        "Campaign":         df["Campaign"],
+        "Store":            df["Store"],
+        "Demographics":     df["Line Item"],
+        "Creative Size":    df["Creative Size"],
+        "Device Type":      df["Device Type"],
+        "Impressions":      df["Impressions"],
+        "Clicks":           df["Clicks"],
+        "Click Rate (CTR)": df["Click Rate (CTR)"],
+    })
+
+
+# --------------------------------------------------
 # Public entry point
 # --------------------------------------------------
 def build_dv360_data(habanero_df, campaign, region, client=None, week_number=None):
@@ -229,6 +248,9 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
 
     if client == "Bottlemart":
         return _build_bottlemart_dv360(df, campaign)
+
+    if client == "Detwiler's":
+        return _build_detwilers_dv360(df)
 
     # Generic (all other clients)
     df["Store"] = (

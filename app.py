@@ -13,7 +13,7 @@ from dashboard.areas import show_area_performance
 from dashboard.products import show_products
 from dashboard.creatives import show_creatives
 
-from processors import usm, redners, mccaffreys, bottlemart, wrays, repco
+from processors import usm, redners, mccaffreys, bottlemart, wrays, repco, detwilers
 from processors.base import generic_process
 
 
@@ -24,6 +24,7 @@ PROCESSORS = {
     "Bottlemart": bottlemart,
     "Wray's": wrays,
     "Repco": repco,
+    "Detwiler's": detwilers,
 }
 
 PROCESSOR_REGIONS = {
@@ -120,11 +121,11 @@ with col2:
         week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1, value=None, placeholder="Optional")
         campaign_type = st.text_input("Campaign Type (e.g. Regular Ad, Sale)")
 
-    elif brand in ("Redner's", "McCaffrey's", "Bottlemart", "Wray's", "Repco"):
+    elif brand in ("Redner's", "McCaffrey's", "Bottlemart", "Wray's", "Repco", "Detwiler's"):
         week_number = st.number_input("Week Number", min_value=1, max_value=999, step=1, value=None, placeholder="Optional")
         if brand == "McCaffrey's":
             campaign_type = st.selectbox("Campaign Type", ["Sale", "Weekly", "Family Focus"])
-        elif brand in ("Bottlemart", "Wray's", "Repco"):
+        elif brand in ("Bottlemart", "Wray's", "Repco", "Detwiler's"):
             campaign_type = st.text_input("Campaign Type (e.g. Weekly, Sale)")
 
     redners_mode = "FT Only"

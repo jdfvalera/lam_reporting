@@ -209,12 +209,12 @@ def _build_bottlemart_dv360(df, campaign):
 # --------------------------------------------------
 # Detwilers builder
 # --------------------------------------------------
-def _build_detwilers_dv360(df):
+def _build_detwilers_dv360(df, campaign):
     df["Store"] = df["Insertion Order"].astype(str).str.split("_").str[-1]
 
     return pd.DataFrame({
         "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
-        "Campaign":         df["Campaign"],
+        "Campaign":         campaign,
         "Store":            df["Store"],
         "Demographics":     df["Line Item"],
         "Creative Size":    df["Creative Size"],
@@ -250,7 +250,7 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
         return _build_bottlemart_dv360(df, campaign)
 
     if client == "Detwiler's":
-        return _build_detwilers_dv360(df)
+        return _build_detwilers_dv360(df, campaign)
 
     # Generic (all other clients)
     df["Store"] = (

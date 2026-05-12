@@ -1,8 +1,10 @@
 import pandas as pd
 from processors.base import build_campaign_label
 
+_FRAME_LABELS = {"Opening Frame", "End Frame"}
 
-def build_ft_data(df, week_number, campaign_type, client=None):
+
+def build_ft_data(df, week_number, campaign_type, client=None, exclude_frames=True):
 
     df = df.copy()
 
@@ -60,5 +62,13 @@ def build_ft_data(df, week_number, campaign_type, client=None):
             "Ad Size": df.get("Ad Size"),
             "Clicks": df["Clicks"],
         })
+
+    if exclude_frames:
+        product_col = next(
+            (c for c in ft_data.columns if c in ("Product", "Product Name", "Products")),
+            None,
+        )
+        if product_col:
+            ft_data = ft_data[~ft_data[product_col].isin(_FRAME_LABELS)].reset_index(drop=True)
 
     return ft_data, campaign

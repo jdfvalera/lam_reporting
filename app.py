@@ -80,6 +80,7 @@ for key, default in {
     "campaign_name": None,
     "saved_brand": None,
     "unmapped_df": None,
+    "saved_exclude_frames": True,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -137,6 +138,8 @@ with col2:
 
     ft_file = st.file_uploader("FT File", type=["xlsx"]) if _needs_ft else None
     gs_file = st.file_uploader("GS File", type=["xlsx"]) if _needs_gs else None
+
+    exclude_frames = st.checkbox("Exclude Opening/End Frames from FT data", value=True)
 
 # --------------------------------------------------
 # COLUMN 3: CAMPAIGN TARGETS + REPORT SETTINGS
@@ -213,6 +216,7 @@ if st.session_state.stage == "idle":
         st.session_state.saved_region = region
         st.session_state.saved_target_impressions = target_impressions
         st.session_state.saved_target_ctr = target_ctr
+        st.session_state.saved_exclude_frames = exclude_frames
         # Clear cached computed data so done stage recalculates
         st.session_state.ft_data = None
         st.session_state.dv360_data = None
@@ -363,11 +367,13 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     saved_target_impressions  = st.session_state.saved_target_impressions
     saved_target_ctr          = st.session_state.saved_target_ctr
     saved_target_clicks       = int(saved_target_impressions * saved_target_ctr)
+    saved_exclude_frames      = st.session_state.saved_exclude_frames
 
     # Compute ft_data once and cache; always rebuild dv360_data
     if st.session_state.ft_data is None:
         ft_data, campaign_name = build_ft_data(
-            final_clicks, saved_week_number, saved_campaign_type, client=saved_brand
+            final_clicks, saved_week_number, saved_campaign_type,
+            client=saved_brand, exclude_frames=saved_exclude_frames,
         )
         st.session_state.ft_data      = ft_data
         st.session_state.campaign_name = campaign_name

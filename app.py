@@ -403,7 +403,7 @@ if st.session_state.stage == "done" and st.session_state.pc_final_df is not None
     st.dataframe(habanero_df, use_container_width=True)
 
     st.markdown("### Preview — Final Click Tag Output")
-    st.dataframe(final_clicks, use_container_width=True)
+    st.dataframe(ft_data, use_container_width=True)
 
     st.markdown("### Preview — DV360 Data")
     if isinstance(dv360_data, dict):

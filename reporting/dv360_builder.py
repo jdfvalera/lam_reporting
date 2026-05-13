@@ -249,7 +249,7 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
     if client == "Bottlemart":
         return _build_bottlemart_dv360(df, campaign)
 
-    if client == "Detwiler's":
+    if client in ("Detwiler's", "Foodtown"):
         return _build_detwilers_dv360(df, campaign)
 
     # Generic (all other clients)

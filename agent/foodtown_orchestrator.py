@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 from io import BytesIO
@@ -14,8 +13,7 @@ from agent.orchestrator import find_campaign_files, habanero_ready, full_ready
 
 log = logging.getLogger(__name__)
 
-STATE_FILE = ".foodtown_state.json"
-_WEEK_RE   = re.compile(r'^[Ww](\d+)$')
+_WEEK_RE = re.compile(r'^[Ww](\d+)$')
 
 
 # ── Folder helpers ─────────────────────────────────────────────────────────────
@@ -55,35 +53,6 @@ def _get_pairs(week_nums: list[int]) -> list[tuple[int, int]]:
         else:
             i += 1
     return pairs
-
-
-# ── State management ──────────────────────────────────────────────────────────
-
-def _default_state(week_nums: list[int]) -> dict:
-    state: dict = {"monthly_cs": False}
-    pairs = _get_pairs(week_nums)
-    for pair_num, (odd, even) in enumerate(pairs, 1):
-        state[f"W{odd}_habanero"]       = False
-        state[f"W{even}_habanero"]      = False
-        state[f"biweekly{pair_num}_cs"] = False
-    return state
-
-
-def get_state(month_dir: Path, week_nums: list[int]) -> dict:
-    path = month_dir / STATE_FILE
-    if path.exists():
-        with open(path) as f:
-            saved = json.load(f)
-        # Merge with default in case new weeks were added
-        default = _default_state(week_nums)
-        default.update(saved)
-        return default
-    return _default_state(week_nums)
-
-
-def save_state(month_dir: Path, state: dict) -> None:
-    with open(month_dir / STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
 
 
 # ── Per-week Habanero ─────────────────────────────────────────────────────────
@@ -271,84 +240,40 @@ def run_monthly_cs(month_dir: Path, week_folders: dict[int, Path], meta: dict) -
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def _state_done(state: dict, key: str, verify_file: Path | None = None) -> bool:
-    """
-    Return True only if state says done AND the output file actually exists on disk.
-    If the file is missing, reset the state flag so it gets regenerated.
-    """
-    if not state.get(key):
-        return False
-    if verify_file is not None and not verify_file.exists():
-        state[key] = False
-        return False
-    return True
-
-
 def try_advance(month_dir: Path, meta: dict) -> None:
     """
-    Check state and advance to the next incomplete stage.
-    Safe to call repeatedly — completed steps are skipped via state file,
-    but only if the output file actually exists on disk.
+    Re-runs every stage on each call — no state file.
+    Habanero and CS files are overwritten each time the agent restarts.
+    Sequencing is enforced by file existence: biweekly CS requires both
+    habanero files to exist, monthly CS requires both biweekly CS files.
     """
     week_folders = get_week_folders(month_dir)
     if not week_folders:
         return
 
-    state = get_state(month_dir, list(week_folders.keys()))
     pairs = _get_pairs(sorted(week_folders.keys()))
-
-    if not pairs:
-        for week_num, week_dir in week_folders.items():
-            key = f"W{week_num}_habanero"
-            hab_file = _find_habanero_file(week_dir, week_num)
-            if key in state and not _state_done(state, key, hab_file) and habanero_ready(week_dir):
-                run_week_habanero(week_num, week_dir, meta)
-                state[key] = True
-                save_state(month_dir, state)
-        return
 
     for pair_num, (odd, even) in enumerate(pairs, 1):
         odd_dir  = week_folders.get(odd)
         even_dir = week_folders.get(even)
 
         # W{odd} Habanero
-        odd_hab_key = f"W{odd}_habanero"
-        odd_hab_file = _find_habanero_file(odd_dir, odd) if odd_dir else None
-        if odd_hab_key in state and not _state_done(state, odd_hab_key, odd_hab_file):
-            if odd_dir and habanero_ready(odd_dir):
-                run_week_habanero(odd, odd_dir, meta)
-                state[odd_hab_key] = True
-                save_state(month_dir, state)
+        if odd_dir and habanero_ready(odd_dir):
+            run_week_habanero(odd, odd_dir, meta)
 
         # W{even} Habanero
-        even_hab_key = f"W{even}_habanero"
-        even_hab_file = _find_habanero_file(even_dir, even) if even_dir else None
-        if even_hab_key in state and not _state_done(state, even_hab_key, even_hab_file):
-            if even_dir and habanero_ready(even_dir):
-                run_week_habanero(even, even_dir, meta)
-                state[even_hab_key] = True
-                save_state(month_dir, state)
+        if even_dir and habanero_ready(even_dir):
+            run_week_habanero(even, even_dir, meta)
 
-        # Biweekly CS
-        bi_key = f"biweekly{pair_num}_cs"
-        bi_file = _find_biweekly_cs(even_dir, pair_num) if even_dir else None
-        if bi_key in state and not _state_done(state, bi_key, bi_file):
-            if state.get(odd_hab_key) and state.get(even_hab_key):
-                if even_dir and full_ready(even_dir):
-                    run_biweekly_cs(pair_num, odd, even, odd_dir, even_dir, meta)
-                    state[bi_key] = True
-                    save_state(month_dir, state)
+        # Biweekly CS — only if both habanero files exist and FT is ready
+        odd_hab  = _find_habanero_file(odd_dir,  odd)  if odd_dir  else None
+        even_hab = _find_habanero_file(even_dir, even) if even_dir else None
+        if odd_hab and even_hab and even_dir and full_ready(even_dir):
+            run_biweekly_cs(pair_num, odd, even, odd_dir, even_dir, meta)
 
-    # Monthly CS — only when ALL biweekly CS files done
-    monthly_file = next(
-        (f for f in month_dir.iterdir() if f.name.endswith("Monthly_Internal_Raw_File_for_CS.xlsx")),
-        None,
-    )
-    if not _state_done(state, "monthly_cs", monthly_file):
-        all_bi_done = all(
-            state.get(f"biweekly{i}_cs", False) for i in range(1, len(pairs) + 1)
-        )
-        if all_bi_done:
+    # Monthly CS — only if all biweekly CS files exist on disk
+    if len(pairs) == 2:
+        bi1 = _find_biweekly_cs(week_folders.get(pairs[0][1]), 1)
+        bi2 = _find_biweekly_cs(week_folders.get(pairs[1][1]), 2)
+        if bi1 and bi2:
             run_monthly_cs(month_dir, week_folders, meta)
-            state["monthly_cs"] = True
-            save_state(month_dir, state)

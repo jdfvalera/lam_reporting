@@ -71,7 +71,7 @@ def generic_process(
         raise ValueError("Click Tag Guide missing Click Tag columns.")
 
     guide_long = guide.melt(
-        id_vars=[c for c in ["Brand", "Ad Size"] if c in guide.columns],
+        id_vars=[c for c in ["Campaign", "Brand", "Ad Size"] if c in guide.columns],
         value_vars=click_cols,
         var_name="Click Tag",
         value_name="Product",

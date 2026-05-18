@@ -44,6 +44,15 @@ def build_ft_data(df, week_number, campaign_type, client=None, exclude_frames=Tr
             "Product Name": df.get("Product"),
             "Clicks": df["Clicks"],
         })
+    elif client == "Wray's":
+        ft_data = pd.DataFrame({
+            "Date":     df["Date"],
+            "Campaign": campaign,
+            "Product":  df.get("Product"),
+            "Ad Size":  df.get("Ad Size"),
+            "Clicks":   df["Clicks"],
+        })
+
     elif client == "Bottlemart":
         ft_data = pd.DataFrame({
             "Date": df["Date"],

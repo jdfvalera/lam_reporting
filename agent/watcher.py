@@ -140,7 +140,13 @@ class InboxHandler(FileSystemEventHandler):
             brand_dir = path.parent.parent.parent
             week_dir  = path.parent
             month_dir = path.parent.parent
-            if brand_dir.name == "Foodtown" and _WEEK_RE.match(week_dir.name):
+            name = path.name
+            is_output = (
+                name.startswith("(")
+                or name.endswith("_Internal_Raw_File_for_CS.xlsx")
+                or name.startswith(".")
+            )
+            if brand_dir.name == "Foodtown" and _WEEK_RE.match(week_dir.name) and not is_output:
                 self._try_foodtown(month_dir)
 
     def on_created(self, event):

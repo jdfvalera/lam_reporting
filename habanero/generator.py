@@ -7,7 +7,8 @@ def generate_habanero_report(
     frequency_file,
     client,
     report_number,
-    region
+    region,
+    label=None,
 ):
 
     weekly = pd.read_excel(weekly_file, sheet_name="Data")
@@ -51,7 +52,7 @@ def generate_habanero_report(
     else:
         date_range = f"{start.strftime('%b %-d')} - {end.strftime('%b %-d')}"
 
-    filename = f"({report_number}) {client} {date_range}.xlsx"
+    filename = f"({label or report_number}) {client} {date_range}.xlsx"
 
     buffer = BytesIO()
 

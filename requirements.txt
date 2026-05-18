@@ -1,0 +1,13 @@
+# Core data
+pandas
+openpyxl
+python-pptx
+matplotlib
+
+# Agent
+watchdog
+anthropic
+python-dotenv
+
+# Legacy Streamlit UI (app.py)
+streamlit

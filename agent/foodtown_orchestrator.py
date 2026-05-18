@@ -158,13 +158,26 @@ def run_biweekly_cs(
     result = foodtown.process(wide_df, guide_df)
     long_df = result[0] if isinstance(result, tuple) else result
 
-    # Split FT rows by week using odd week's last date as boundary
-    # DV360 dates are +1 day (UTC) vs FT local dates for US; AU has no shift
-    shift    = pd.Timedelta(days=1) if region == "US" else pd.Timedelta(0)
-    odd_end  = df_odd["Date"].max() - shift
+    # Split FT rows by Campaign column — more reliable than date-based split
+    # because a campaign string can span dates across both weeks.
+    # Sort the two unique campaign strings by their earliest date to determine odd vs even.
     long_df["Date"] = pd.to_datetime(long_df["Date"], errors="coerce")
-    long_odd  = long_df[long_df["Date"] <= odd_end]
-    long_even = long_df[long_df["Date"] >  odd_end]
+    camp_col = "Campaign" if "Campaign" in long_df.columns else None
+
+    if camp_col and long_df[camp_col].nunique() >= 2:
+        camp_order = (
+            long_df.groupby(camp_col)["Date"].min()
+            .sort_values()
+            .index.tolist()
+        )
+        long_odd  = long_df[long_df[camp_col] == camp_order[0]]
+        long_even = long_df[long_df[camp_col] == camp_order[1]]
+    else:
+        # Fallback: split by date if Campaign column is absent or has only one value
+        shift    = pd.Timedelta(days=1) if region == "US" else pd.Timedelta(0)
+        odd_end  = df_odd["Date"].max() - shift
+        long_odd  = long_df[long_df["Date"] <= odd_end]
+        long_even = long_df[long_df["Date"] >  odd_end]
 
     # Build ft_data per week, override campaign label, then concat
     def _ft_week(subset: pd.DataFrame, label: str) -> pd.DataFrame:

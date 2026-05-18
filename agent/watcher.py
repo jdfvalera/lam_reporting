@@ -38,10 +38,9 @@ class InboxHandler(FileSystemEventHandler):
         Per-week Habanero → Bi-weekly CS → Monthly CS
     """
 
-    def __init__(self, inbox: Path, output: Path) -> None:
+    def __init__(self, inbox: Path) -> None:
         super().__init__()
         self.inbox    = inbox
-        self.output   = output
         self._hab_done:  set[str] = set()
         self._full_done: set[str] = set()
         self._ft_running: set[str] = set()   # Foodtown months currently being processed
@@ -93,7 +92,7 @@ class InboxHandler(FileSystemEventHandler):
         if run_full:
             log.info(f"[{key}] FT file detected — running full pipeline...")
             try:
-                orchestrator.run_campaign(campaign_dir, meta, self.output)
+                orchestrator.run_campaign(campaign_dir, meta)
             except Exception:
                 log.exception(f"Full pipeline failed for {key}")
                 with self._lock:
@@ -102,7 +101,7 @@ class InboxHandler(FileSystemEventHandler):
         elif run_hab:
             log.info(f"[{key}] Weekly + Frequency detected — generating Habanero...")
             try:
-                orchestrator.run_habanero_only(campaign_dir, meta, self.output)
+                orchestrator.run_habanero_only(campaign_dir, meta)
             except Exception:
                 log.exception(f"Habanero generation failed for {key}")
                 with self._lock:
@@ -179,8 +178,8 @@ def _scan_existing(inbox: Path, handler: InboxHandler) -> None:
                 handler._try_process(child)
 
 
-def start_watcher(inbox: Path, output: Path) -> Observer:
-    handler = InboxHandler(inbox, output)
+def start_watcher(inbox: Path) -> Observer:
+    handler = InboxHandler(inbox)
     _scan_existing(inbox, handler)
 
     observer = Observer()

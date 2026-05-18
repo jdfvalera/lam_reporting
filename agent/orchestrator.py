@@ -89,7 +89,7 @@ PROCESSORS = {
 }
 
 
-def run_habanero_only(folder_path: Path, meta: dict, output_root: Path) -> None:
+def run_habanero_only(folder_path: Path, meta: dict) -> None:
     """Generate and write only the Habanero report (weekly + frequency files only)."""
     client        = meta["client"]
     report_number = meta["report_number"]
@@ -111,7 +111,7 @@ def run_habanero_only(folder_path: Path, meta: dict, output_root: Path) -> None:
     log.info(f"[{tag}] Habanero ready → {folder_path / hab_filename}")
 
 
-def run_campaign(folder_path: Path, meta: dict, output_root: Path) -> None:
+def run_campaign(folder_path: Path, meta: dict) -> None:
     client        = meta["client"]
     brand         = meta["brand"]
     week_number   = meta["week_number"]

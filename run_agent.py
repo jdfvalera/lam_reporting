@@ -2,38 +2,31 @@
 LAM Reporting Agent
 ===================
 Drop campaign files into the inbox and the agent processes them automatically,
-writing outputs to the output folder.
+writing outputs into the same campaign folder as the source files.
 
 Folder structure:
     inbox/
       {Brand}/                       ← brand key folder
-        {CampaignFolder}/            ← W{N}, W{N}_{CampaignType}, or {Client}_W{N}_...
+        {CampaignFolder}/            ← W{N}, W{N}_{CampaignType}, etc.
           weekly.xlsx
           frequency.xlsx
           ft.xlsx
           gs.xlsx                    (Redner's only, optional)
 
-    output/
-      {Brand}/
-        {CampaignFolder}/
-          ({R}) {Client} {dates}.xlsx
-          {Client}_Internal_Raw_File_for_CS.xlsx
-
 Brand keys:
     USM | Redners | McCaffreys | Bottlemart | Wrays | Repco | Detwilers | Foodtown
 
 Campaign folder examples:
-    W8_Sale_R8            →  week 8, Sale campaign, report 8
-    W12_Weekly            →  week 12, Weekly campaign
-    W3_Promo              →  week 3, Promo campaign
-    W6                    →  week 6, no campaign type
-    MyClient_W8_Sale      →  explicit client name "MyClient"
+    29_W30        →  report 29, week 30
+    29_W30_Weekly →  report 29, week 30, campaign type Weekly
+    25_Sale       →  report 25, Sale campaign
+    FY26 Period 3 →  full name used as label and campaign type
 
 Full examples:
-    inbox/McCaffreys/W8_Sale_R8/
-    inbox/USM/W12_Weekly/
-    inbox/Bottlemart/W3_Promo/
-    inbox/Redners/W6/
+    inbox/McCaffreys/29_W30_Weekly/
+    inbox/USM/FY26 Period 3 Week 3/
+    inbox/Redners/29_W78/
+    inbox/Foodtown/Month 1/W1/
 
 Run:
     python run_agent.py
@@ -57,20 +50,17 @@ log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
 INBOX    = BASE_DIR / "inbox"
-OUTPUT   = BASE_DIR / "output"
 
 INBOX.mkdir(exist_ok=True)
-OUTPUT.mkdir(exist_ok=True)
 
 from agent.watcher import start_watcher  # noqa: E402 — after path setup
 
 
 def main() -> None:
     log.info("LAM Reporting Agent starting...")
-    log.info(f"Inbox  → {INBOX}")
-    log.info(f"Output → {OUTPUT}")
+    log.info(f"Inbox → {INBOX}")
 
-    observer = start_watcher(INBOX, OUTPUT)
+    observer = start_watcher(INBOX)
 
     def _shutdown(sig, frame):
         log.info("Shutting down...")

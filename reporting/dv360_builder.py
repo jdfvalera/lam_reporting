@@ -207,6 +207,32 @@ def _build_bottlemart_dv360(df, campaign):
 
 
 # --------------------------------------------------
+# Wray's builder
+# --------------------------------------------------
+def _build_wrays_dv360(df, campaign):
+    # Insertion Order format: "WRAYS - CHALET IGA" → strip brand prefix before " - "
+    df["Store"] = (
+        df["Insertion Order"]
+        .astype(str)
+        .str.split(" - ", n=1)
+        .str[-1]
+        .str.strip()
+    )
+
+    return pd.DataFrame({
+        "Date":             df["Date"].dt.strftime("%Y/%m/%d"),
+        "Campaign":         campaign,
+        "Store":            df["Store"],
+        "Demographics":     df["Line Item"],
+        "Creative Size":    df["Creative Size"],
+        "Device Type":      df["Device Type"],
+        "Impressions":      df["Impressions"],
+        "Clicks":           df["Clicks"],
+        "Click Rate (CTR)": df["Click Rate (CTR)"],
+    })
+
+
+# --------------------------------------------------
 # Detwilers builder
 # --------------------------------------------------
 def _build_detwilers_dv360(df, campaign):
@@ -251,6 +277,9 @@ def build_dv360_data(habanero_df, campaign, region, client=None, week_number=Non
 
     if client in ("Detwiler's", "Foodtown"):
         return _build_detwilers_dv360(df, campaign)
+
+    if client == "Wray's":
+        return _build_wrays_dv360(df, campaign)
 
     # Generic (all other clients)
     df["Store"] = (

@@ -88,6 +88,9 @@ def generic_process(
     # Determine join keys dynamically
     join_keys = ["Click Tag"]
 
+    if "Campaign" in long_df.columns and "Campaign" in guide_long.columns:
+        join_keys.append("Campaign")
+
     if "Brand" in long_df.columns and "Brand" in guide_long.columns:
         join_keys.append("Brand")
 

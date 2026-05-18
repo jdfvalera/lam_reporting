@@ -118,6 +118,23 @@ def run_week_habanero(week_num: int, week_dir: Path, meta: dict) -> None:
 
 # ── Bi-weekly CS file ─────────────────────────────────────────────────────────
 
+def _week_date_range(hab_df: pd.DataFrame, region: str) -> str:
+    """Build a date range string from a habanero DataFrame, applying region shift."""
+    dates = hab_df["Date"].dropna()
+    if region == "US":
+        dates = dates - pd.Timedelta(days=1)
+    start, end = dates.min(), dates.max()
+    if start.month == end.month:
+        return f"{start.strftime('%b %-d')} - {end.strftime('%-d')}"
+    return f"{start.strftime('%b %-d')} - {end.strftime('%b %-d')}"
+
+
+def _month_label(month_dir: Path) -> str:
+    """Extract month number from folder name: 'Month 1' → 'M1', 'Month 2' → 'M2'."""
+    m = re.search(r'\d+', month_dir.name)
+    return f"M{m.group()}" if m else month_dir.name
+
+
 def run_biweekly_cs(
     pair_num: int,
     odd_week_num: int,
@@ -126,15 +143,14 @@ def run_biweekly_cs(
     even_week_dir: Path,
     meta: dict,
 ) -> None:
-    client        = meta["client"]
-    campaign_type = meta.get("campaign_type")
-    week_number   = meta.get("week_number")
-    region        = meta["region"]
+    client = meta["client"]
+    region = meta["region"]
+    month_dir = odd_week_dir.parent
 
     log.info(f"[Foodtown Biweekly{pair_num}] Building CS file (W{odd_week_num}+W{even_week_num})...")
 
-    # Read both week habaneros back from disk and concat
-    hab_odd  = _find_habanero_file(odd_week_dir, odd_week_num)
+    # Read both week habaneros back from disk
+    hab_odd  = _find_habanero_file(odd_week_dir,  odd_week_num)
     hab_even = _find_habanero_file(even_week_dir, even_week_num)
 
     if hab_odd is None or hab_even is None:
@@ -148,7 +164,15 @@ def run_biweekly_cs(
     for df in (df_odd, df_even):
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-    combined_habanero = pd.concat([df_odd, df_even], ignore_index=True)
+    # Build per-week campaign labels: M1_W1_May 1 - 7, M1_W2_May 8 - 14
+    mn          = _month_label(month_dir)
+    odd_range   = _week_date_range(df_odd,  region)
+    even_range  = _week_date_range(df_even, region)
+    odd_label   = f"{mn}_W{odd_week_num}_{odd_range}"
+    even_label  = f"{mn}_W{even_week_num}_{even_range}"
+
+    log.info(f"[Foodtown Biweekly{pair_num}]   odd  label → {odd_label}")
+    log.info(f"[Foodtown Biweekly{pair_num}]   even label → {even_label}")
 
     # Process FT file from even week folder
     files = find_campaign_files(even_week_dir)
@@ -163,33 +187,35 @@ def run_biweekly_cs(
     guide_df = pd.read_excel(xls, sheet_name=1) if len(xls.sheet_names) > 1 else None
 
     result = foodtown.process(wide_df, guide_df)
-    if isinstance(result, tuple):
-        long_df, _ = result
-    else:
-        long_df = result
+    long_df = result[0] if isinstance(result, tuple) else result
 
-    final_clicks = foodtown.build_final_export(
-        long_df, week_number=week_number, campaign_type=campaign_type
-    )
+    # Split FT rows by week using odd week's last date as boundary
+    # DV360 dates are +1 day (UTC) vs FT local dates for US; AU has no shift
+    shift    = pd.Timedelta(days=1) if region == "US" else pd.Timedelta(0)
+    odd_end  = df_odd["Date"].max() - shift
+    long_df["Date"] = pd.to_datetime(long_df["Date"], errors="coerce")
+    long_odd  = long_df[long_df["Date"] <= odd_end]
+    long_even = long_df[long_df["Date"] >  odd_end]
 
-    ft_data, campaign_name = build_ft_data(
-        final_clicks, week_number, campaign_type,
-        client="Foodtown", exclude_frames=True,
-    )
+    # Build ft_data per week, override campaign label, then concat
+    def _ft_week(subset: pd.DataFrame, label: str) -> pd.DataFrame:
+        final = foodtown.build_final_export(subset)
+        ft, _ = build_ft_data(final, None, None, client="Foodtown", exclude_frames=True)
+        ft["Campaign"] = label
+        return ft
 
-    dv360_data = build_dv360_data(
-        combined_habanero, campaign_name, region,
-        client="Foodtown", week_number=week_number,
-    )
+    ft_data = pd.concat([_ft_week(long_odd, odd_label), _ft_week(long_even, even_label)],
+                        ignore_index=True)
+
+    # Build dv360_data per week with the correct label, then concat
+    dv_odd  = build_dv360_data(df_odd,  odd_label,  region, client="Foodtown")
+    dv_even = build_dv360_data(df_even, even_label, region, client="Foodtown")
+    dv360_data = pd.concat([dv_odd, dv_even], ignore_index=True)
 
     cs_buffer = BytesIO()
     with pd.ExcelWriter(cs_buffer, engine="openpyxl") as writer:
-        ft_data.to_excel(writer, sheet_name="ft_data", index=False)
-        if isinstance(dv360_data, dict):
-            for sheet_name, sheet_df in dv360_data.items():
-                sheet_df.to_excel(writer, sheet_name=sheet_name, index=False)
-        else:
-            dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
+        ft_data.to_excel(writer,    sheet_name="ft_data",    index=False)
+        dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
 
     cs_filename = f"{client}_Biweekly{pair_num}_Internal_Raw_File_for_CS.xlsx"
     (even_week_dir / cs_filename).write_bytes(cs_buffer.getvalue())

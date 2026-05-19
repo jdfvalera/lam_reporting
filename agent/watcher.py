@@ -43,8 +43,22 @@ class InboxHandler(FileSystemEventHandler):
         self.inbox    = inbox
         self._hab_done:  set[str] = set()
         self._full_done: set[str] = set()
-        self._ft_running: set[str] = set()   # Foodtown months currently being processed
+        self._ft_running: set[str] = set()
+        self._ft_snapshot: dict[str, frozenset] = {}  # month_key → input files at last run
         self._lock = threading.Lock()
+
+    def _foodtown_input_snapshot(self, month_dir: Path) -> frozenset:
+        """Collect names of all non-output files across week subfolders."""
+        files = set()
+        for child in month_dir.iterdir():
+            if child.is_dir() and re.match(r'[Ww]\d+', child.name):
+                for f in child.iterdir():
+                    name = f.name
+                    if not (name.startswith("(")
+                            or name.endswith("_Internal_Raw_File_for_CS.xlsx")
+                            or name.startswith(".")):
+                        files.add(f"{child.name}/{name}")
+        return frozenset(files)
 
     # ── Standard brand processing ─────────────────────────────────────────────
 
@@ -110,12 +124,16 @@ class InboxHandler(FileSystemEventHandler):
     # ── Foodtown multi-week processing ────────────────────────────────────────
 
     def _try_foodtown(self, month_dir: Path) -> None:
-        key = _month_key(month_dir)
+        key      = _month_key(month_dir)
+        snapshot = self._foodtown_input_snapshot(month_dir)
 
         with self._lock:
             if key in self._ft_running:
                 return
+            if snapshot == self._ft_snapshot.get(key):
+                return  # No new input files since last run — skip
             self._ft_running.add(key)
+            self._ft_snapshot[key] = snapshot
 
         try:
             config = load_config(month_dir)

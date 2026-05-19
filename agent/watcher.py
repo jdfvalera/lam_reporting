@@ -81,7 +81,19 @@ class InboxHandler(FileSystemEventHandler):
         run_hab  = False
         run_full = False
 
+        # Check disk: if expected outputs already exist, mark done and skip
+        has_cs       = any(f.name.endswith("_Internal_Raw_File_for_CS.xlsx")
+                           for f in campaign_dir.iterdir() if f.is_file())
+        has_habanero = any(f.name.startswith("(") and f.suffix.lower() == ".xlsx"
+                           for f in campaign_dir.iterdir() if f.is_file())
+
         with self._lock:
+            if has_cs:
+                self._full_done.add(key)
+                self._hab_done.add(key)
+            elif has_habanero:
+                self._hab_done.add(key)
+
             if full_ready(campaign_dir) and key not in self._full_done:
                 self._full_done.add(key)
                 self._hab_done.add(key)

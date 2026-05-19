@@ -53,12 +53,15 @@ INBOX    = BASE_DIR / "inbox"
 
 INBOX.mkdir(exist_ok=True)
 
+import time
+
 from agent.watcher import start_watcher  # noqa: E402 — after path setup
 
 
 def main() -> None:
     log.info("LAM Reporting Agent starting...")
     log.info(f"Inbox → {INBOX}")
+    time.sleep(3)  # let macOS settle file handles before scanning
 
     observer = start_watcher(INBOX)
 

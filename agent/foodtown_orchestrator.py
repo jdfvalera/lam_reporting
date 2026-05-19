@@ -270,23 +270,26 @@ def try_advance(month_dir: Path, meta: dict) -> None:
         odd_dir  = week_folders.get(odd)
         even_dir = week_folders.get(even)
 
-        # W{odd} Habanero
-        if odd_dir and habanero_ready(odd_dir):
+        # W{odd} Habanero — skip if output already exists
+        if odd_dir and habanero_ready(odd_dir) and _find_habanero_file(odd_dir, odd) is None:
             run_week_habanero(odd, odd_dir, meta)
 
-        # W{even} Habanero
-        if even_dir and habanero_ready(even_dir):
+        # W{even} Habanero — skip if output already exists
+        if even_dir and habanero_ready(even_dir) and _find_habanero_file(even_dir, even) is None:
             run_week_habanero(even, even_dir, meta)
 
-        # Biweekly CS — only if both habanero files exist and FT is ready
+        # Biweekly CS — skip if output already exists
         odd_hab  = _find_habanero_file(odd_dir,  odd)  if odd_dir  else None
         even_hab = _find_habanero_file(even_dir, even) if even_dir else None
-        if odd_hab and even_hab and even_dir and full_ready(even_dir):
+        bi_cs    = _find_biweekly_cs(even_dir, pair_num) if even_dir else None
+        if odd_hab and even_hab and even_dir and full_ready(even_dir) and bi_cs is None:
             run_biweekly_cs(pair_num, odd, even, odd_dir, even_dir, meta)
 
-    # Monthly CS — only if all biweekly CS files exist on disk
+    # Monthly CS — only if all biweekly CS files exist and monthly doesn't yet
     if len(pairs) == 2:
-        bi1 = _find_biweekly_cs(week_folders.get(pairs[0][1]), 1)
-        bi2 = _find_biweekly_cs(week_folders.get(pairs[1][1]), 2)
-        if bi1 and bi2:
+        bi1      = _find_biweekly_cs(week_folders.get(pairs[0][1]), 1)
+        bi2      = _find_biweekly_cs(week_folders.get(pairs[1][1]), 2)
+        monthly  = next((f for f in month_dir.iterdir()
+                         if f.name.endswith("Monthly_Internal_Raw_File_for_CS.xlsx")), None)
+        if bi1 and bi2 and monthly is None:
             run_monthly_cs(month_dir, week_folders, meta)

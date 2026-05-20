@@ -180,8 +180,17 @@ class InboxHandler(FileSystemEventHandler):
                 self._try_foodtown(month_dir)
 
     def on_created(self, event):
-        if not event.is_directory:
-            self._dispatch(Path(event.src_path))
+        path = Path(event.src_path)
+        if event.is_directory:
+            # macOS sometimes emits DirCreated instead of DirMoved for renames
+            if path.parent.parent == self.inbox:
+                self._try_process(path)
+                if path.parent.name == "Foodtown":
+                    self._try_foodtown(path)
+            elif path.parent.parent.parent == self.inbox and path.parent.parent.name == "Foodtown":
+                self._try_foodtown(path.parent)
+        else:
+            self._dispatch(path)
 
     def on_modified(self, event):
         if not event.is_directory:

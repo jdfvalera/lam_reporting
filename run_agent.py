@@ -54,6 +54,8 @@ INBOX    = BASE_DIR / "inbox"
 INBOX.mkdir(exist_ok=True)
 
 import time
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 from agent.watcher import start_watcher  # noqa: E402 — after path setup
 

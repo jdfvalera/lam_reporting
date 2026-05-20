@@ -25,7 +25,7 @@ def default_clicktag_longform(df: pd.DataFrame) -> pd.DataFrame:
 
     long_df["Click Tag"] = (
         long_df["Click Tag"]
-        .str.replace("Click Tag ", "", regex=False)
+        .str.replace(r"(?i)click tag ", "", regex=True)
         .astype(int)
     )
 
@@ -79,7 +79,7 @@ def generic_process(
 
     guide_long["Click Tag"] = (
         guide_long["Click Tag"]
-        .str.replace("Click Tag ", "", regex=False)
+        .str.replace(r"(?i)click tag ", "", regex=True)
         .astype(int)
     )
 

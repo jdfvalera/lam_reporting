@@ -190,10 +190,15 @@ class InboxHandler(FileSystemEventHandler):
     def on_moved(self, event):
         dest = Path(event.dest_path)
         if event.is_directory:
-            # Renamed folder — re-check as a campaign or Foodtown month
-            self._try_process(dest)
-            if dest.parent.parent == self.inbox and dest.parent.name == "Foodtown":
-                self._try_foodtown(dest)
+            if dest.parent.parent == self.inbox:
+                # Standard campaign folder renamed: inbox/{Brand}/{Campaign}/
+                self._try_process(dest)
+                # Also handles Foodtown month folder renamed: inbox/Foodtown/{Month}/
+                if dest.parent.name == "Foodtown":
+                    self._try_foodtown(dest)
+            elif dest.parent.parent.parent == self.inbox and dest.parent.parent.name == "Foodtown":
+                # Foodtown week subfolder renamed: inbox/Foodtown/{Month}/{Week}/
+                self._try_foodtown(dest.parent)
         else:
             self._dispatch(dest)
 

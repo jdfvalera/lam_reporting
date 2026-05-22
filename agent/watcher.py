@@ -11,10 +11,13 @@ from agent.orchestrator import habanero_ready, full_ready
 from agent import orchestrator
 from agent import foodtown_orchestrator
 from agent.foodtown_orchestrator import is_foodtown_month
+from agent import riesbecks_orchestrator
+from agent.riesbecks_orchestrator import is_riesbecks_month
 
 log = logging.getLogger(__name__)
 
 _WEEK_RE = re.compile(r'^[Ww]\d+$')
+_RIESBECKS_WEEK_RE = re.compile(r'^(?:[Ww])?\d+$')
 
 
 def _campaign_key(campaign_dir: Path) -> str:
@@ -75,6 +78,11 @@ class InboxHandler(FileSystemEventHandler):
         # Foodtown month folders are handled separately
         if brand_folder == "Foodtown" and is_foodtown_month(campaign_dir):
             self._try_foodtown(campaign_dir)
+            return
+
+        # Riesbecks month folders are handled separately
+        if brand_folder == "Riesbecks" and is_riesbecks_month(campaign_dir):
+            self._try_riesbecks(campaign_dir)
             return
 
         key      = _campaign_key(campaign_dir)
@@ -157,6 +165,30 @@ class InboxHandler(FileSystemEventHandler):
             with self._lock:
                 self._ft_running.discard(key)
 
+    # ── Riesbecks multi-week processing ──────────────────────────────────────
+
+    def _try_riesbecks(self, month_dir: Path) -> None:
+        key      = f"Riesbecks/{month_dir.name}"
+        snapshot = self._foodtown_input_snapshot(month_dir)
+
+        with self._lock:
+            if key in self._ft_running:
+                return
+            if snapshot == self._ft_snapshot.get(key):
+                return
+            self._ft_running.add(key)
+            self._ft_snapshot[key] = snapshot
+
+        try:
+            config = load_config(month_dir)
+            meta   = parse_campaign("Riesbecks", month_dir.name, config)
+            riesbecks_orchestrator.try_advance(month_dir, meta)
+        except Exception:
+            log.exception(f"Riesbecks processing failed for {month_dir.name}")
+        finally:
+            with self._lock:
+                self._ft_running.discard(key)
+
     # ── watchdog callbacks ────────────────────────────────────────────────────
 
     def _dispatch(self, path: Path) -> None:
@@ -178,6 +210,8 @@ class InboxHandler(FileSystemEventHandler):
             )
             if brand_dir.name == "Foodtown" and _WEEK_RE.match(week_dir.name) and not is_output:
                 self._try_foodtown(month_dir)
+            elif brand_dir.name == "Riesbecks" and _RIESBECKS_WEEK_RE.match(week_dir.name) and not is_output:
+                self._try_riesbecks(month_dir)
 
     def on_created(self, event):
         path = Path(event.src_path)
@@ -187,8 +221,12 @@ class InboxHandler(FileSystemEventHandler):
                 self._try_process(path)
                 if path.parent.name == "Foodtown":
                     self._try_foodtown(path)
+                elif path.parent.name == "Riesbecks":
+                    self._try_riesbecks(path)
             elif path.parent.parent.parent == self.inbox and path.parent.parent.name == "Foodtown":
                 self._try_foodtown(path.parent)
+            elif path.parent.parent.parent == self.inbox and path.parent.parent.name == "Riesbecks":
+                self._try_riesbecks(path.parent)
         else:
             self._dispatch(path)
 
@@ -202,12 +240,14 @@ class InboxHandler(FileSystemEventHandler):
             if dest.parent.parent == self.inbox:
                 # Standard campaign folder renamed: inbox/{Brand}/{Campaign}/
                 self._try_process(dest)
-                # Also handles Foodtown month folder renamed: inbox/Foodtown/{Month}/
                 if dest.parent.name == "Foodtown":
                     self._try_foodtown(dest)
+                elif dest.parent.name == "Riesbecks":
+                    self._try_riesbecks(dest)
             elif dest.parent.parent.parent == self.inbox and dest.parent.parent.name == "Foodtown":
-                # Foodtown week subfolder renamed: inbox/Foodtown/{Month}/{Week}/
                 self._try_foodtown(dest.parent)
+            elif dest.parent.parent.parent == self.inbox and dest.parent.parent.name == "Riesbecks":
+                self._try_riesbecks(dest.parent)
         else:
             self._dispatch(dest)
 
@@ -224,6 +264,8 @@ def _scan_existing(inbox: Path, handler: InboxHandler) -> None:
                 continue
             if brand_dir.name == "Foodtown" and is_foodtown_month(child):
                 handler._try_foodtown(child)
+            elif brand_dir.name == "Riesbecks" and is_riesbecks_month(child):
+                handler._try_riesbecks(child)
             else:
                 handler._try_process(child)
 

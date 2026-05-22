@@ -11,6 +11,7 @@ BRAND_KEY_MAP = {
     "Repco":      "Repco",
     "Detwilers":  "Detwiler's",
     "Foodtown":   "Foodtown",
+    "Riesbecks":  "Riesbeck's",
     "Custom":     "Custom",
 }
 

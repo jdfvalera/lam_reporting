@@ -30,7 +30,7 @@ def product_pie_chart(products, palette):
         startangle=90,
         pctdistance=0.75,
     )
-
+    
     for t in texts:
         t.set_fontsize(7)
     for at in autotexts:

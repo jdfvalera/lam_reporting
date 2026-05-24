@@ -221,3 +221,6 @@ __marimo__/
 *.pptx
 
 *.json
+
+# DV360 folder
+dv360/

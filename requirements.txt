@@ -4,10 +4,19 @@ openpyxl
 python-pptx
 matplotlib
 
+# Ad hoc PDF reports
+reportlab
+
 # Agent
 watchdog
 anthropic
+openai
 python-dotenv
+
+# DV360 / DBM API
+google-auth
+google-api-python-client
+tabulate
 
 # Legacy Streamlit UI (app.py)
 streamlit

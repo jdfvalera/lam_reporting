@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-from .base import default_clicktag_longform
+from .base import default_clicktag_longform, clean_ad_size
 
 
 # --------------------------------------------------
@@ -45,12 +45,6 @@ def process(
     # -------------------------------
     # Ad Size normalization
     # -------------------------------
-    def clean_ad_size(val):
-        if not isinstance(val, str):
-            return None
-        m = re.search(r"\d+\s*x\s*\d+", val)
-        return m.group(0).replace(" ", "") if m else None
-
     long_df["Ad Size"] = long_df["Ad Size"].apply(clean_ad_size)
 
     # -------------------------------
@@ -187,12 +181,6 @@ def process_gs(
     # -------------------------------
     # Ad Size
     # -------------------------------
-    def clean_ad_size(val):
-        if not isinstance(val, str):
-            return None
-        m = re.search(r"\d+\s*x\s*\d+", val)
-        return m.group(0).replace(" ", "") if m else None
-
     df["Ad Size"] = df["Creative Pixel Size"].apply(clean_ad_size)
 
     # -------------------------------

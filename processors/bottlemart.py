@@ -1,5 +1,5 @@
 import pandas as pd
-from .base import generic_process, build_campaign_label
+from .base import generic_process, derive_date_range_and_label
 
 
 # --------------------------------------------------
@@ -46,20 +46,7 @@ def build_final_export(
     if campaign_type is None:
         raise ValueError("Bottlemart requires a Campaign Type.")
 
-    df = df.copy()
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date"])
-
-    start = df["Date"].min()
-    end = df["Date"].max()
-
-    if start.month == end.month:
-        date_range = f"{start.strftime('%b')} {start.day} - {end.day}"
-    else:
-        date_range = f"{start.strftime('%b')} {start.day} - {end.strftime('%b')} {end.day}"
-
-    campaign = build_campaign_label(date_range, campaign_type, week_number)
+    df, _, campaign = derive_date_range_and_label(df, campaign_type, week_number)
 
     return pd.DataFrame({
         "Date": df["Date"].dt.strftime("%Y/%m/%d"),

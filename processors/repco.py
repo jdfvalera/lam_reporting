@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from .base import generic_process, build_campaign_label
+from .base import generic_process, derive_date_range_and_label
 
 
 # --------------------------------------------------
@@ -11,13 +11,7 @@ def process(
     guide_df: pd.DataFrame | None = None
 ) -> tuple:
 
-    result = generic_process(df, guide_df)
-
-    if isinstance(result, tuple):
-        long_df, unmapped_df = result
-    else:
-        long_df = result
-        unmapped_df = pd.DataFrame()
+    long_df, unmapped_df = generic_process(df, guide_df)
 
     return long_df, unmapped_df
 
@@ -32,20 +26,7 @@ def build_final_export(
     **kwargs
 ) -> pd.DataFrame:
 
-    df = df.copy()
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date"])
-
-    start = df["Date"].min()
-    end = df["Date"].max()
-
-    if start.month == end.month:
-        date_range = f"{start.strftime('%b')} {start.day} - {end.day}"
-    else:
-        date_range = f"{start.strftime('%b')} {start.day} - {end.strftime('%b')} {end.day}"
-
-    campaign = build_campaign_label(date_range, campaign_type, week_number)
+    df, _, campaign = derive_date_range_and_label(df, campaign_type, week_number)
 
     store = re.sub(r"\s*store\s*$", "", campaign_type, flags=re.IGNORECASE).strip() if campaign_type else None
 

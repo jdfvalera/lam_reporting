@@ -1,6 +1,5 @@
 import pandas as pd
-import re
-from .base import default_clicktag_longform
+from .base import default_clicktag_longform, clean_ad_size
 
 # --------------------------------------------------
 # Canonical USM categories
@@ -74,12 +73,6 @@ def process(
     # -------------------------------
     # Ad Size normalization
     # -------------------------------
-    def clean_ad_size(val):
-        if not isinstance(val, str):
-            return None
-        match = re.search(r"\d+\s*x\s*\d+", val)
-        return match.group(0).replace(" ", "") if match else None
-
     long_df["Ad Size"] = long_df["Ad Size"].apply(clean_ad_size)
 
     # -------------------------------

@@ -49,7 +49,7 @@ def generic_process(
 
     # If no guide, return base output
     if guide_df is None:
-        return long_df
+        return long_df, pd.DataFrame()
 
     # Rename expected guide columns
     guide = guide_df.rename(
@@ -131,6 +131,27 @@ def build_campaign_label(
     elif week_number is not None:
         return f"W{week_number}_{date_range}"
     return date_range
+
+
+# --------------------------------------------------
+# Shared export helper
+# --------------------------------------------------
+def derive_date_range_and_label(
+    df: pd.DataFrame,
+    campaign_type: str | None,
+    week_number: int | None,
+) -> tuple:
+    df = df.copy()
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
+    start = df["Date"].min()
+    end = df["Date"].max()
+    if start.month == end.month:
+        date_range = f"{start.strftime('%b')} {start.day} - {end.day}"
+    else:
+        date_range = f"{start.strftime('%b')} {start.day} - {end.strftime('%b')} {end.day}"
+    campaign = build_campaign_label(date_range, campaign_type, week_number)
+    return df, date_range, campaign
 
 
 # --------------------------------------------------

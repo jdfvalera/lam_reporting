@@ -219,3 +219,5 @@ __marimo__/
 *.docx
 *.ppt
 *.pptx
+
+*.json

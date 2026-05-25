@@ -63,6 +63,19 @@ class InboxHandler(FileSystemEventHandler):
                         files.add(f"{child.name}/{name}")
         return frozenset(files)
 
+    def _riesbecks_input_snapshot(self, month_dir: Path) -> frozenset:
+        """Collect names of all non-output files across Riesbecks week subfolders (bare digits or W##)."""
+        files = set()
+        for child in month_dir.iterdir():
+            if child.is_dir() and _RIESBECKS_WEEK_RE.match(child.name):
+                for f in child.iterdir():
+                    name = f.name
+                    if not (name.startswith("(")
+                            or name.endswith("_Internal_Raw_File_for_CS.xlsx")
+                            or name.startswith(".")):
+                        files.add(f"{child.name}/{name}")
+        return frozenset(files)
+
     # ── Standard brand processing ─────────────────────────────────────────────
 
     def _try_process(self, campaign_dir: Path) -> None:
@@ -169,7 +182,7 @@ class InboxHandler(FileSystemEventHandler):
 
     def _try_riesbecks(self, month_dir: Path) -> None:
         key      = f"Riesbecks/{month_dir.name}"
-        snapshot = self._foodtown_input_snapshot(month_dir)
+        snapshot = self._riesbecks_input_snapshot(month_dir)
 
         with self._lock:
             if key in self._ft_running:

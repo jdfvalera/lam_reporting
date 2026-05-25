@@ -1,0 +1,5 @@
+# Additional deps for the Google Drive poller feature.
+# Install alongside the repo's existing requirements.txt.
+python-dotenv
+google-auth
+google-api-python-client

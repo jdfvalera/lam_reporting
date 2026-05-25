@@ -1,6 +1,6 @@
 # CS Reporting Pipeline
 
-An automated post-campaign reporting pipeline. Drop your DV360 export files into a watched inbox folder and the agent processes them automatically — generating Habanero reports, Internal Raw Files for CS, and (for Foodtown) monthly aggregations.
+An automated post-campaign reporting pipeline. Drop your DV360 export files into a watched inbox folder and the agent processes them automatically — generating Habanero reports, Internal Raw Files for CS, and (for Foodtown and Riesbecks) monthly aggregations.
 
 The legacy Streamlit UI (`app.py`) remains available for manual use.
 
@@ -14,13 +14,14 @@ The legacy Streamlit UI (`app.py`) remains available for manual use.
 4. [Inbox Folder Structure](#inbox-folder-structure)
 5. [Folder Naming Convention](#folder-naming-convention)
 6. [Foodtown Multi-Week Flow](#foodtown-multi-week-flow)
-7. [File Detection (No Renaming Required)](#file-detection-no-renaming-required)
-8. [Outputs](#outputs)
-9. [USM Auto-Categorization](#usm-auto-categorization)
-10. [Supported Brands](#supported-brands)
-11. [Troubleshooting](#troubleshooting)
-12. [Project Structure](#project-structure)
-13. [Legacy Streamlit UI](#legacy-streamlit-ui)
+7. [Riesbecks Multi-Week Flow](#riesbecks-multi-week-flow)
+8. [File Detection (No Renaming Required)](#file-detection-no-renaming-required)
+9. [Outputs](#outputs)
+10. [USM Auto-Categorization](#usm-auto-categorization)
+11. [Supported Brands](#supported-brands)
+12. [Troubleshooting](#troubleshooting)
+13. [Project Structure](#project-structure)
+14. [Legacy Streamlit UI](#legacy-streamlit-ui)
 
 ---
 
@@ -103,6 +104,7 @@ inbox/
   Repco/
   Detwilers/
   Foodtown/        ← see Foodtown section below
+  Riesbecks/       ← see Riesbecks section below
 ```
 
 ---
@@ -177,6 +179,50 @@ inbox/Foodtown/
 | `(W4) Foodtown May 22-28.xlsx` | `W4/` |
 | `Foodtown_Biweekly2_Internal_Raw_File_for_CS.xlsx` | `W4/` |
 | `Foodtown_Monthly_Internal_Raw_File_for_CS.xlsx` | `Month 1/` |
+
+---
+
+## Riesbecks Multi-Week Flow
+
+Riesbecks campaigns span one month (4 weeks). Each week has two banners: **Regular** and **3DS**.
+
+```
+inbox/Riesbecks/
+  Month 1 (May 4 - 31)/
+    18/   ← 2 weekly + 2 frequency + FT file → 2 habaneros + partial CS
+    19/   ← same
+    20/   ← same
+    21/   ← all 4 partial CSes done → Monthly CS written to month folder
+```
+
+**Important:** Week subfolders use **bare digits** (`18`, `19`, …), not `W18`. This is different from Foodtown.
+
+**Input files per week folder:**
+- 2 weekly pull files (one Regular, one 3DS — banner auto-detected from Campaign column)
+- 2 frequency files (paired by row count: fewer rows = 3DS)
+- 1 combined FT file (both banners, wide format with `Click Tag 1–10` columns; Sheet2 is a product guide)
+
+**Trigger rules:**
+- Week folder with ≥2 weekly + ≥2 frequency files → habaneros `(W18 Regular)` and `(W18 3DS)`
+- Both habaneros + FT file present → partial CS written to the week subfolder
+- All 4 week folders have a partial CS → Monthly CS written to the month folder
+
+**No state file** — unlike Foodtown, idempotency is based on output file presence.
+
+**Outputs per month:**
+| File | Location |
+|---|---|
+| `(W18 Regular) Riesbeck's May 4-10.xlsx` | `18/` |
+| `(W18 3DS) Riesbeck's May 7-9.xlsx` | `18/` |
+| `(W18) Riesbeck's_Internal_Raw_File_for_CS.xlsx` | `18/` |
+| _(same pattern for W19, W20, W21)_ | |
+| `Riesbeck's_Monthly_Internal_Raw_File_for_CS.xlsx` | `Month 1 (…)/` |
+
+**Riesbecks CS schema** (differs from standard):
+
+`ft_data` columns: `Date`, `Week`, `Campaign`, `Banner`, `Store Name`, `Location`, `Ad Size`, `Product Name`, `Clicks`
+
+`dv360_data` columns: standard columns plus `Week` (format: `W18_May 4 - 10`) and `Banner`
 
 ---
 
@@ -262,6 +308,7 @@ USM products are automatically assigned to one of 13 canonical categories using 
 | `Repco` | Repco | AU | |
 | `Detwilers` | Detwiler's | US | |
 | `Foodtown` | Foodtown | US | Multi-week/monthly flow |
+| `Riesbecks` | Riesbeck's | US | Multi-week/monthly flow, two banners (Regular + 3DS) |
 
 ---
 
@@ -299,6 +346,7 @@ lam_reporting/
 │   ├── watcher.py                # Watchdog file-system monitor
 │   ├── orchestrator.py           # Standard brand pipeline runner
 │   ├── foodtown_orchestrator.py  # Foodtown multi-week state machine
+│   ├── riesbecks_orchestrator.py # Riesbecks multi-week/banner pipeline
 │   ├── folder_parser.py          # Folder name → campaign metadata
 │   └── categorizer.py            # USM keyword-based auto-categorizer
 │
@@ -314,7 +362,8 @@ lam_reporting/
 │   ├── wrays.py                  # Wray's
 │   ├── repco.py                  # Repco (AU)
 │   ├── detwilers.py              # Detwiler's
-│   └── foodtown.py               # Foodtown
+│   ├── foodtown.py               # Foodtown
+│   └── riesbecks.py              # Riesbeck's
 │
 ├── reporting/
 │   ├── ft_builder.py             # Builds ft_data sheet

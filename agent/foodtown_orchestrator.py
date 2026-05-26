@@ -214,6 +214,131 @@ def _find_biweekly_cs(week_dir: Path, pair_num: int) -> Path | None:
     return None
 
 
+def _find_partial_cs(week_dir: Path, week_num: int) -> Path | None:
+    prefix = f"(W{week_num})"
+    for f in week_dir.iterdir():
+        if f.name.startswith(prefix) and f.name.endswith("_Internal_Raw_File_for_CS.xlsx"):
+            return f
+    return None
+
+
+def _find_monthly_cs(month_dir: Path) -> Path | None:
+    for f in month_dir.iterdir():
+        if f.is_file() and f.name.endswith("Monthly_Internal_Raw_File_for_CS.xlsx"):
+            return f
+    return None
+
+
+def _select_week_rows(long_df: pd.DataFrame, hab_df: pd.DataFrame, region: str) -> pd.DataFrame:
+    """
+    Pick the FT rows matching one Foodtown week.
+
+    Foodtown FT files can arrive either as a single-week file or as a combined
+    multi-week file. Prefer Campaign grouping when there are multiple campaign
+    strings; otherwise fall back to the Habanero date range.
+    """
+    if long_df.empty:
+        return long_df
+
+    long_df = long_df.copy()
+    long_df["Date"] = pd.to_datetime(long_df["Date"], errors="coerce")
+
+    hab_dates = pd.to_datetime(hab_df["Date"], errors="coerce").dropna()
+    if hab_dates.empty:
+        return long_df
+
+    shift = pd.Timedelta(days=1) if region == "US" else pd.Timedelta(0)
+    week_start = hab_dates.min() - shift
+    week_end = hab_dates.max() - shift
+
+    camp_col = "Campaign" if "Campaign" in long_df.columns else None
+    if camp_col and long_df[camp_col].nunique(dropna=True) > 1:
+        best_campaign = None
+        best_score = None
+        for campaign, group in long_df.dropna(subset=[camp_col]).groupby(camp_col):
+            dates = group["Date"].dropna()
+            if dates.empty:
+                continue
+            start, end = dates.min(), dates.max()
+            overlap_start = max(start, week_start)
+            overlap_end = min(end, week_end)
+            overlap_days = max((overlap_end - overlap_start).days + 1, 0)
+            distance = min(abs((start - week_start).days), abs((end - week_end).days))
+            score = (overlap_days, -distance, len(group))
+            if best_score is None or score > best_score:
+                best_score = score
+                best_campaign = campaign
+
+        if best_campaign is not None:
+            return long_df[long_df[camp_col] == best_campaign]
+
+    by_date = long_df[(long_df["Date"] >= week_start) & (long_df["Date"] <= week_end)]
+    return by_date if not by_date.empty else long_df
+
+
+def _partial_has_ft_data(partial_path: Path | None) -> bool:
+    if partial_path is None:
+        return False
+    try:
+        return "ft_data" in pd.ExcelFile(partial_path, engine="openpyxl").sheet_names
+    except Exception:
+        return False
+
+
+def run_partial_cs(week_num: int, week_dir: Path, meta: dict) -> None:
+    client = meta["client"]
+    region = meta["region"]
+    month_dir = week_dir.parent
+
+    log.info(f"[Foodtown W{week_num}] Building partial CS file...")
+
+    hab_file = _find_habanero_file(week_dir, week_num)
+    if hab_file is None:
+        raise FileNotFoundError(f"Could not find habanero file for W{week_num}")
+
+    files = find_campaign_files(week_dir)
+    ft_file = files["ft"]
+
+    hab_df = pd.read_excel(hab_file, sheet_name="Data")
+    hab_df["Date"] = pd.to_datetime(hab_df["Date"], errors="coerce")
+
+    mn = _month_label(month_dir)
+    week_range = _week_date_range(hab_df, region)
+    week_label = f"{mn}_W{week_num}_{week_range}"
+
+    log.info(f"[Foodtown W{week_num}]   label → {week_label}")
+
+    dv360_data = build_dv360_data(hab_df, week_label, region, client="Foodtown")
+    ft_data = None
+
+    if ft_file is not None:
+        log.info(f"[Foodtown W{week_num}]   ft    → {ft_file.name}")
+
+        xls = pd.ExcelFile(ft_file)
+        wide_df = pd.read_excel(xls, sheet_name=0)
+        guide_df = pd.read_excel(xls, sheet_name=1) if len(xls.sheet_names) > 1 else None
+
+        result = foodtown.process(wide_df, guide_df)
+        long_df = result[0] if isinstance(result, tuple) else result
+        long_week = _select_week_rows(long_df, hab_df, region)
+
+        final = foodtown.build_final_export(long_week)
+        ft_data, _ = build_ft_data(final, None, None, client="Foodtown", exclude_frames=True)
+        ft_data["Campaign"] = week_label
+    else:
+        log.info(f"[Foodtown W{week_num}]   ft    → not available yet; writing dv360_data only")
+
+    cs_buffer = BytesIO()
+    with pd.ExcelWriter(cs_buffer, engine="openpyxl") as writer:
+        if ft_data is not None:
+            ft_data.to_excel(writer, sheet_name="ft_data", index=False)
+        dv360_data.to_excel(writer, sheet_name="dv360_data", index=False)
+
+    cs_filename = f"(W{week_num}) {client}_Internal_Raw_File_for_CS.xlsx"
+    (week_dir / cs_filename).write_bytes(cs_buffer.getvalue())
+    log.info(f"[Foodtown W{week_num}] Partial CS → {cs_filename}")
+
+
 def run_monthly_cs(month_dir: Path, week_folders: dict[int, Path], meta: dict) -> None:
     client = meta["client"]
     pairs  = _get_pairs(sorted(week_folders.keys()))
@@ -251,6 +376,32 @@ def run_monthly_cs(month_dir: Path, week_folders: dict[int, Path], meta: dict) -
     log.info(f"[Foodtown Monthly] Wrote: {cs_filename}")
 
 
+def run_monthly_cs_from_partials(month_dir: Path, week_folders: dict[int, Path], meta: dict) -> None:
+    client = meta["client"]
+
+    log.info(f"[Foodtown Monthly] Building monthly CS file from partials...")
+
+    ft_frames = []
+    dv_frames = []
+    for week_num in sorted(week_folders.keys()):
+        partial = _find_partial_cs(week_folders[week_num], week_num)
+        if partial is None:
+            raise FileNotFoundError(f"Partial CS file not found for W{week_num}")
+        log.info(f"[Foodtown Monthly]   W{week_num} → {partial.name}")
+        xls = pd.ExcelFile(partial, engine="openpyxl")
+        ft_frames.append(pd.read_excel(xls, sheet_name="ft_data"))
+        dv_frames.append(pd.read_excel(xls, sheet_name="dv360_data"))
+
+    cs_buffer = BytesIO()
+    with pd.ExcelWriter(cs_buffer, engine="openpyxl") as writer:
+        pd.concat(ft_frames, ignore_index=True).to_excel(writer, sheet_name="ft_data", index=False)
+        pd.concat(dv_frames, ignore_index=True).to_excel(writer, sheet_name="dv360_data", index=False)
+
+    cs_filename = f"{client}_Monthly_Internal_Raw_File_for_CS.xlsx"
+    (month_dir / cs_filename).write_bytes(cs_buffer.getvalue())
+    log.info(f"[Foodtown Monthly] Wrote: {cs_filename}")
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def try_advance(month_dir: Path, meta: dict) -> None:
@@ -278,6 +429,19 @@ def try_advance(month_dir: Path, meta: dict) -> None:
         if even_dir and habanero_ready(even_dir) and _find_habanero_file(even_dir, even) is None:
             run_week_habanero(even, even_dir, meta)
 
+        # Per-week partial CS. If only Habanero inputs are available, write a
+        # dv360_data-only partial. When FT arrives later, overwrite it with a
+        # full two-sheet partial that includes ft_data.
+        odd_hab = _find_habanero_file(odd_dir, odd) if odd_dir else None
+        odd_partial = _find_partial_cs(odd_dir, odd) if odd_dir else None
+        if odd_hab and odd_dir and (odd_partial is None or (find_campaign_files(odd_dir)["ft"] is not None and not _partial_has_ft_data(odd_partial))):
+            run_partial_cs(odd, odd_dir, meta)
+
+        even_hab = _find_habanero_file(even_dir, even) if even_dir else None
+        even_partial = _find_partial_cs(even_dir, even) if even_dir else None
+        if even_hab and even_dir and (even_partial is None or (find_campaign_files(even_dir)["ft"] is not None and not _partial_has_ft_data(even_partial))):
+            run_partial_cs(even, even_dir, meta)
+
         # Biweekly CS — skip if output already exists
         odd_hab  = _find_habanero_file(odd_dir,  odd)  if odd_dir  else None
         even_hab = _find_habanero_file(even_dir, even) if even_dir else None
@@ -285,11 +449,21 @@ def try_advance(month_dir: Path, meta: dict) -> None:
         if odd_hab and even_hab and even_dir and full_ready(even_dir) and bi_cs is None:
             run_biweekly_cs(pair_num, odd, even, odd_dir, even_dir, meta)
 
-    # Monthly CS — only if all biweekly CS files exist and monthly doesn't yet
-    if len(pairs) == 2:
+    # Monthly CS — prefer the new weekly partial files when the first 4 weeks
+    # are complete; otherwise retain the legacy biweekly fallback.
+    monthly = _find_monthly_cs(month_dir)
+    if len(week_folders) >= 4 and monthly is None:
+        first_four = dict(list(sorted(week_folders.items()))[:4])
+        all_partials_done = all(
+            _partial_has_ft_data(_find_partial_cs(week_folders[n], n))
+            for n in sorted(first_four.keys())
+        )
+        if all_partials_done:
+            run_monthly_cs_from_partials(month_dir, first_four, meta)
+
+    # Legacy monthly fallback — only if all biweekly CS files exist and monthly doesn't yet
+    if len(pairs) == 2 and _find_monthly_cs(month_dir) is None:
         bi1      = _find_biweekly_cs(week_folders.get(pairs[0][1]), 1)
         bi2      = _find_biweekly_cs(week_folders.get(pairs[1][1]), 2)
-        monthly  = next((f for f in month_dir.iterdir()
-                         if f.name.endswith("Monthly_Internal_Raw_File_for_CS.xlsx")), None)
-        if bi1 and bi2 and monthly is None:
+        if bi1 and bi2:
             run_monthly_cs(month_dir, week_folders, meta)

@@ -262,6 +262,35 @@ def _record_folder(ctx: SyncContext, rel: tuple[str, ...], folder_id: str, child
     ctx.remote_files[rel] = {child.name: child for child in children if not child.is_folder}
 
 
+def _foodtown_week_needs_partial(rel: tuple[str, ...], children: list[DriveFile]) -> bool:
+    """True when a Foodtown week has Habanero inputs but no partial CS output yet."""
+    if len(rel) < 3 or rel[0] != "Foodtown":
+        return False
+
+    week_match = _WEEK_RE.match(rel[-1])
+    if not week_match:
+        return False
+
+    file_names = [child.name for child in children if not child.is_folder]
+    input_names = [name.lower() for name in file_names]
+    has_weekly = any(name.endswith(".xlsx") and "weekly" in name and not _is_output_or_state(Path(name)) for name in input_names)
+    has_frequency = any(
+        name.endswith(".xlsx")
+        and ("frequency" in name or "freq" in name)
+        and not _is_output_or_state(Path(name))
+        for name in input_names
+    )
+    if not (has_weekly and has_frequency):
+        return False
+
+    week_num = int(re.search(r"\d+", rel[-1]).group())
+    partial_prefix = f"(W{week_num})"
+    return not any(
+        name.startswith(partial_prefix) and name.endswith("_Internal_Raw_File_for_CS.xlsx")
+        for name in file_names
+    )
+
+
 def _download_folder_files(client: DriveClient, ctx: SyncContext, rel: tuple[str, ...], folder_id: str, children: list[DriveFile]) -> None:
     local_dir = ctx.local_root.joinpath(*rel)
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -273,9 +302,12 @@ def _download_folder_files(client: DriveClient, ctx: SyncContext, rel: tuple[str
         state_files.get("/".join(rel + (child.name,))) != child.signature
         for child in downloadable
     )
+    force_scan = _foodtown_week_needs_partial(rel, children)
 
-    if changed:
+    if changed or force_scan:
         _mark_changed_dir(ctx, rel)
+        if force_scan and not changed:
+            log.info("Foodtown week missing partial CS; forcing scan: %s", "/".join(rel))
         for child in downloadable:
             dest = local_dir / child.name
             client.download(child.id, dest)
